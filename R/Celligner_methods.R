@@ -299,7 +299,7 @@ calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, h
     }
   }
 
-  if(!all(c('symbol', 'ensembl_gene_id', 'locus_group') %in% hgnc.complete.set)) {
+  if(!all(c('symbol', 'ensembl_gene_id', 'locus_group') %in% colnames(hgnc.complete.set))) {
     stop('HGNC gene file does not contain expected columns (symbol, ensembl_gene_id, & locus_group)')
   }
 
@@ -385,8 +385,8 @@ cluster_data <- function(seu_obj) {
 #'
 #' @export find_differentially_expressed_genes
 find_differentially_expressed_genes <- function(seu_obj) {
-  if(is.null(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data'))) {
-    stop("Seurat object doesn't expression data at scale.data, run 'create_Seurat_object' first")
+  if(nrow(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data'))==0) {
+    stop("Seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
   }
   if(!'seurat_clusters' %in% colnames(seu_obj@meta.data)) {
     stop("Seurat object doesn't contain the column 'seurat_clusters', run 'cluster_data' first")
@@ -422,15 +422,21 @@ find_differentially_expressed_genes <- function(seu_obj) {
 #'
 #' @export run_cPCA
 run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
+  if(nrow(Seurat::GetAssayData(TCGA_obj, assay='RNA', slot='scale.data'))==0) {
+    stop("TCGA seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
+  }
+  if(nrow(Seurat::GetAssayData(CCLE_obj, assay='RNA', slot='scale.data'))==0) {
+    stop("CCLE seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
+  }
   cov_diff_eig <- run_cPCA_analysis(t(Seurat::GetAssayData(TCGA_obj, assay='RNA', slot='scale.data')),
                                     t(Seurat::GetAssayData(CCLE_obj, assay='RNA', slot='scale.data')),
                                     TCGA_obj@meta.data, CCLE_obj@meta.data, pc_dims=pc_dims)
  return(cov_diff_eig)
 }
 
-#' @param CCLE_cor: matrix of genes by samples of cPC corrected data that serves as the reference data in the MNN alignment.
+#' @param CCLE_cor: matrix of samples by genes of cPC corrected data that serves as the reference data in the MNN alignment.
 #' In the default Celligner pipeline this the cell line data.
-#' @param TCGA_cor: matrix of genes by samples of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
+#' @param TCGA_cor: matrix of samples by genes of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
 #' In the default Celligner pipeline this the tumor data.
 #' @param k1: the number of neighbors within the data being corrected (by default the tumor data). By default this
 #' pulls from the global paramter mnn_k_tumor, which by default is 50.
@@ -537,9 +543,9 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
    gene_stats <- calc_gene_stats(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
 
   comb_ann <- rbind(
-    dat$TCGA_ann %>% dplyr::select(sampleID, lineage, subtype, `Primary/Metastasis`) %>%
+    dat$TCGA_ann %>% dplyr::select(sampleID, lineage, subtype) %>%
       dplyr::mutate(type = 'tumor'),
-    dat$CCLE_ann %>% dplyr::select(sampleID, lineage, subtype, `Primary/Metastasis`) %>%
+    dat$CCLE_ann %>% dplyr::select(sampleID, lineage, subtype) %>%
       dplyr::mutate(type = 'CL')
   )
 
