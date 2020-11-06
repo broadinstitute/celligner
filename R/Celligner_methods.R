@@ -2,6 +2,9 @@ library(magrittr)
 library(tidyverse)
 
 
+#' method to load in tumor and cell line expression data and annotations
+#' @name load_data
+#'
 #' @param cell_line_data_name: if cell_line_taiga = TRUE, then the data.name of the taiga file containing the cell line expression data,
 #' if cell_line_taiga=FALSE, then the file path to the local folder containing the cell line expression data
 #' @param cell_line_data_file: if cell_line_taiga = TRUE, then the data.file of the taiga file containing the cell line expression data,
@@ -47,7 +50,8 @@ library(tidyverse)
 #' @importFrom magrittr "%>%"
 #'
 #' @description load expression and annotation files for cell lines and tumors
-#' @export load_data
+#' @return dat object with cell line and tumor expression data and annotations
+#' @export
 load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_version, cell_line_taiga,
                       cell_line_ann_name, cell_line_ann_file,cell_line_ann_version, cell_line_ann_taiga,
                       tumor_data_name, tumor_data_file, tumor_version, tumor_taiga,
@@ -272,6 +276,9 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
   return(list(TCGA_mat = TCGA_mat, TCGA_ann = TCGA_ann, CCLE_mat = CCLE_mat, CCLE_ann = CCLE_ann))
 }
 
+#' Method to calculate gene average expression and variance for an expression matrix
+#' @name calc_gene_stats
+#'
 #' @param dat: data object containing tumor and cell line expression data and annotations produced by running load_data
 #' @param hgnc_data_name: if hgnc_taiga = TRUE, then the data.name of the taiga file containing the HGNC gene annotations,
 #' if hgnc_taiga=FALSE, then the file path to the local folder containing the HGNC gene annotations
@@ -281,7 +288,8 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
 #' @param hgnc_taiga: if TRUE then pulls the HGNC gene annotations from taiga, if FALSE then finds HGNC gene annotations in local folder
 #'
 #' @description calculate the average gene expression and variance
-#' @export cluster_data
+#' @return gene stats matrix
+#' @export
 calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga) {
   common_genes <- intersect(colnames(dat$TCGA_mat), colnames(dat$CCLE_mat))
 
@@ -326,12 +334,17 @@ calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, h
   }
 
 
+#' Method to create seurat objects given an expression matrix and annotation table
+#' @name create_Seurat_object
+#'
 #' @param exp_mat: matrix of samples by genes, where genes are ensembl gene IDs. Data should be log2(X+1) TPM data.
 #' @param ann: matrix of sample anntoations. Expects column 'sampleID' which matches the rownames of exp_mat.
 #' @param type: optional parameter, string specifying the data type of the current data (ex. 'tumor'), which is added to the annotation matrix.
 #' @description create Seurat object of expression data and annotations and run dimensionality reduction.
 #' Dimensionality reductions will be run with the parameters (n_PC_dims, umap_n_neighbors, umap_min_dist, distance_metric) specified in global.
-#' @export cluster_data
+#' @return Seurat object with scaled expression data and annotations stored in meta.data
+#' @export
+#'
 create_Seurat_object <- function(exp_mat, ann, type = NULL) {
   seu_obj <- Seurat::CreateSeuratObject(t(exp_mat),
                                          min.cells = 0,
@@ -357,12 +370,17 @@ create_Seurat_object <- function(exp_mat, ann, type = NULL) {
   return(seu_obj)
 }
 
+#' Method to take in a Seurat object and run default Seurat clustering algorithm
+#' @name cluster_data
+#'
 #' @param seu_obj: seurat object containing expression data and sample annotations.
 #' Expects PCA for the seurat object has already been calculated.
 #' @description cluster data in seurat object, using default Seurat clustering method. Clsuters data
 #' within PCA space using the number of dimensions provided in global$n_PC_dims (default is 70)
 #'
-#' @export cluster_data
+#' @return Seurat object with cluster annotations
+#' @export
+#'
 cluster_data <- function(seu_obj) {
   seu_obj <- Seurat::FindNeighbors(seu_obj, reduction = 'pca',
                                     dims = 1:global$n_PC_dims,
@@ -379,11 +397,16 @@ cluster_data <- function(seu_obj) {
 
   }
 
+#' Method to find genes that are differentially expressed between clusters within the expression data
+#' @name find_differentially_expressed_genes
+#'
 #' @param seu_obj: seurat object containing expression data and sample annotations. Expects data in the Seurat object
 #' slot scale.data and a column 'seurat_clusters' within the meta.data of the Seurat object.
 #' @description find genes that are differentially expressed between clusters within the expression data
 #'
-#' @export find_differentially_expressed_genes
+#' @return table with gene level stats
+#' @export
+#'
 find_differentially_expressed_genes <- function(seu_obj) {
   if(nrow(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data'))==0) {
     stop("Seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
@@ -412,6 +435,9 @@ find_differentially_expressed_genes <- function(seu_obj) {
 
 }
 
+#' Method to run contrastive principal components analysis
+#' @name run_cPCA
+#'
 #' @param TCGA_obj: seurat object containing expression data and sample annotations, usually the tumor data
 #' @param CCLE_obj: seurat object containing expression data and sample annotations, usually the cell line data
 #' @param pc_dims: the number of cPCs calculated. If set to null then all cPCs will be calculated (this is quite slow), but if set to
@@ -420,7 +446,9 @@ find_differentially_expressed_genes <- function(seu_obj) {
 #' @description run contrastive principal components analysis.
 #' Set pc_dims to a value >= 4 to run fast cPCA by just calculating the top contrastive principle components
 #'
-#' @export run_cPCA
+#' @return object containing cPC vectors and values
+#' @export
+#'
 run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
   if(nrow(Seurat::GetAssayData(TCGA_obj, assay='RNA', slot='scale.data'))==0) {
     stop("TCGA seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
@@ -434,6 +462,9 @@ run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
  return(cov_diff_eig)
 }
 
+#' Method to run mutual nearest neighbors batch correction
+#' @name run_MNN
+#'
 #' @param CCLE_cor: matrix of samples by genes of cPC corrected data that serves as the reference data in the MNN alignment.
 #' In the default Celligner pipeline this the cell line data.
 #' @param TCGA_cor: matrix of samples by genes of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
@@ -448,7 +479,9 @@ run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
 #' expressed genes is usually passed here.
 #' @description run MNN batch correction to align data to a reference dataset
 #'
-#' @export run_MNN
+#' @return mutual nearest neighbors object with corrected data for the second dataset provided as input and the mutual nearest neighbors
+#' @export
+#'
 run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = global$mnn_k_tumor, k2 = global$mnn_k_CL, ndist = global$mnn_ndist,
                     subset_genes) {
   mnn_res <- modified_mnnCorrect(CCLE_cor, TCGA_cor, k1 = k1, k2 = k2, ndist = ndist,
@@ -457,12 +490,17 @@ run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = global$mnn_k_tumor, k2 = global$mn
   return(mnn_res)
 }
 
+#' Method to calculate the correlation between cell lines and tumor in the Celligner aligned data
+#' @name calc_tumor_CL_cor
+#'
 #' @param Celligner_aligned_data: Celligner aligned data matrix of samples (cells line and tumors) by genes
 #' @param Celligner_info: annotation file of cell line and tumor samples with a column 'type' marking samples as either
 #' cell lines or tumors and a column 'sampleID' that matches the row names of Celligner_aligned_data
 #' @description calculate the correlation between cell line and tumor samples in the Celligner aligned data
 #'
-#' @export calc_tumor_CL_cor
+#' @return matrix of correlations that is tumors by cell lines
+#' @export
+#'
 calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
   tumors_samples <- dplyr::filter(Celligner_info, type=='tumor')$sampleID
   cl_samples <- dplyr::filter(Celligner_info, type=='CL')$sampleID
@@ -474,6 +512,9 @@ calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
 }
 
 
+#' All methods to run Celligner and save the output, if desired
+#' @name run_Celligner
+#'
 #' @param cell_line_data_name: if cell_line_taiga = TRUE, then the data.name of the taiga file containing the cell line expression data,
 #' if cell_line_taiga=FALSE, then the file path to the local folder containing the cell line expression data
 #' @param cell_line_data_file: if cell_line_taiga = TRUE, then the data.file of the taiga file containing the cell line expression data,
@@ -521,7 +562,9 @@ calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
 #'
 #' @description run all parts of the Celligner pipeline
 #'
-#' @export run_Celligner
+#' @return seurat object of the Celligner-aligned data
+#' @export
+#'
 run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data_file = 'CCLE_expression_full', cell_line_version = NULL, cell_line_taiga=TRUE,
                           cell_line_ann_name='arxspan-cell-line-export-f808', cell_line_ann_file = 'ACH',cell_line_ann_version = NULL, cell_line_ann_taiga=TRUE,
                           tumor_data_name = 'celligner-input-9827', tumor_data_file = 'tumor_expression', tumor_version = NULL, tumor_taiga = TRUE,
