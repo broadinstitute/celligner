@@ -247,7 +247,9 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
       }
     }
   }
-
+  # check for NAs
+  TCGA_mat <- check_NAs(TCGA_mat)
+  CCLE_mat <- check_NAs(CCLE_mat)
 
   # subset to samples in both the annotation and gene expression matrices, and match ordering between them
   common_cls <- intersect(rownames(CCLE_mat), CCLE_ann$sampleID)
@@ -272,6 +274,7 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
 
   TCGA_mat <- TCGA_mat[,genes_used]
   CCLE_mat <- CCLE_mat[,genes_used]
+
 
   return(list(TCGA_mat = TCGA_mat, TCGA_ann = TCGA_ann, CCLE_mat = CCLE_mat, CCLE_ann = CCLE_ann))
 }
@@ -341,7 +344,7 @@ calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, h
 #' @param ann: matrix of sample anntoations. Expects column 'sampleID' which matches the rownames of exp_mat.
 #' @param type: optional parameter, string specifying the data type of the current data (ex. 'tumor'), which is added to the annotation matrix.
 #' @description create Seurat object of expression data and annotations and run dimensionality reduction.
-#' Dimensionality reductions will be run with the parameters (n_PC_dims, umap_n_neighbors, umap_min_dist, distance_metric) specified in global.
+#' Dimensionality reductions will be run with the parameters (n_PC_dims, umap_n_neighbors, umap_min_dist, distance_metric) specified in celligner_global.
 #' @return Seurat object with scaled expression data and annotations stored in meta.data
 #' @export
 #'
@@ -359,13 +362,13 @@ create_Seurat_object <- function(exp_mat, ann, type = NULL) {
 
   seu_obj %<>% Seurat::RunPCA(assay='RNA',
                                features = rownames(Seurat::GetAssayData(seu_obj)),
-                               npcs = global$n_PC_dims, verbose = F)
+                               npcs = celligner_global$n_PC_dims, verbose = F)
 
-  seu_obj %<>% Seurat::RunUMAP(assay = 'RNA', dims = 1:global$n_PC_dims,
+  seu_obj %<>% Seurat::RunUMAP(assay = 'RNA', dims = 1:celligner_global$n_PC_dims,
                                 reduction = 'pca',
-                                n.neighbors = global$umap_n_neighbors,
-                                min.dist =  global$umap_min_dist,
-                                metric = global$distance_metric, verbose=F)
+                                n.neighbors = celligner_global$umap_n_neighbors,
+                                min.dist =  celligner_global$umap_min_dist,
+                                metric = celligner_global$distance_metric, verbose=F)
 
   return(seu_obj)
 }
@@ -376,20 +379,20 @@ create_Seurat_object <- function(exp_mat, ann, type = NULL) {
 #' @param seu_obj: seurat object containing expression data and sample annotations.
 #' Expects PCA for the seurat object has already been calculated.
 #' @description cluster data in seurat object, using default Seurat clustering method. Clsuters data
-#' within PCA space using the number of dimensions provided in global$n_PC_dims (default is 70)
+#' within PCA space using the number of dimensions provided in celligner_global$n_PC_dims (default is 70)
 #'
 #' @return Seurat object with cluster annotations
 #' @export
 #'
 cluster_data <- function(seu_obj) {
   seu_obj <- Seurat::FindNeighbors(seu_obj, reduction = 'pca',
-                                    dims = 1:global$n_PC_dims,
+                                    dims = 1:celligner_global$n_PC_dims,
                                     k.param = 20,
                                     force.recalc = TRUE,
                                     verbose = FALSE)
 
   seu_obj %<>% Seurat::FindClusters(reduction = 'pca',
-                                     resolution = global$mod_clust_res)
+                                     resolution = celligner_global$mod_clust_res)
 
   seu_obj@meta.data$cluster <- seu_obj@meta.data$seurat_clusters
 
@@ -470,11 +473,11 @@ run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
 #' @param TCGA_cor: matrix of samples by genes of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
 #' In the default Celligner pipeline this the tumor data.
 #' @param k1: the number of neighbors within the data being corrected (by default the tumor data). By default this
-#' pulls from the global paramter mnn_k_tumor, which by default is 50.
+#' pulls from the celligner_global paramter mnn_k_tumor, which by default is 50.
 #' @param k2: the number of neighbors within the reference data (by default the cell line data). By default this
-#' pulls from the global parameter mnn_k_CL, which by default is 5.
-#' @param ndist: A numeric scalar specifying the threshold beyond which neighbors are to be ingnored when computing correction vectors.
-#' By default this pulls from the global parameter mnn_ndist, which by default is 3.
+#' pulls from the celligner_global parameter mnn_k_CL, which by default is 5.
+#' @param ndist: A numeric scalar specifying the threshold beyond which neighbors are to be ignored when computing correction vectors.
+#' By default this pulls from the celligner_global parameter mnn_ndist, which by default is 3.
 #' @param subset_genes: the subset of genes used for identifying mutual nearest neighbors within the datasets. The set of differentially
 #' expressed genes is usually passed here.
 #' @description run MNN batch correction to align data to a reference dataset
@@ -482,7 +485,7 @@ run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
 #' @return mutual nearest neighbors object with corrected data for the second dataset provided as input and the mutual nearest neighbors
 #' @export
 #'
-run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = global$mnn_k_tumor, k2 = global$mnn_k_CL, ndist = global$mnn_ndist,
+run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
                     subset_genes) {
   mnn_res <- modified_mnnCorrect(CCLE_cor, TCGA_cor, k1 = k1, k2 = k2, ndist = ndist,
                              subset_genes = subset_genes)
@@ -583,7 +586,7 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
                    additional_annotations_name, additional_annotations_file, additional_annotations_version, additional_annotations_taiga,
                    hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
 
-   gene_stats <- calc_gene_stats(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
+  gene_stats <- calc_gene_stats(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
 
   comb_ann <- rbind(
     dat$TCGA_ann %>% dplyr::select(sampleID, lineage, subtype) %>%
@@ -610,23 +613,23 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
 
   # take genes that are ranked in the top 1000 from either dataset, used for finding mutual nearest neighbors
   DE_gene_set <- DE_genes %>%
-    dplyr::filter(best_rank < global$top_DE_genes_per) %>%
+    dplyr::filter(best_rank < celligner_global$top_DE_genes_per) %>%
     .[['Gene']]
 
 
-  cov_diff_eig <- run_cPCA(TCGA_obj, CCLE_obj, global$fast_cPCA)
+  cov_diff_eig <- run_cPCA(TCGA_obj, CCLE_obj, celligner_global$fast_cPCA)
 
-  if(is.null(global$fast_cPCA)) {
-    cur_vecs <- cov_diff_eig$vectors[, global$remove_cPCA_dims, drop = FALSE]
+  if(is.null(celligner_global$fast_cPCA)) {
+    cur_vecs <- cov_diff_eig$vectors[, celligner_global$remove_cPCA_dims, drop = FALSE]
   } else {
-    cur_vecs <- cov_diff_eig$rotation[, global$remove_cPCA_dims, drop = FALSE]
+    cur_vecs <- cov_diff_eig$rotation[, celligner_global$remove_cPCA_dims, drop = FALSE]
   }
 
   rownames(cur_vecs) <- colnames(dat$TCGA_mat)
   TCGA_cor <- resid(lm(t(dat$TCGA_mat) ~ 0 + cur_vecs)) %>% t()
   CCLE_cor <- resid(lm(t(dat$CCLE_mat) ~ 0 + cur_vecs)) %>% t()
 
-  mnn_res <- run_MNN(CCLE_cor, TCGA_cor,  k1 = global$mnn_k_tumor, k2 = global$mnn_k_CL, ndist = global$mnn_ndist,
+  mnn_res <- run_MNN(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
                       subset_genes = DE_gene_set)
 
   combined_mat <- rbind(mnn_res$corrected, CCLE_cor)
@@ -658,10 +661,4 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
 
   return(comb_obj)
 }
-
-
-
-
-
-
 

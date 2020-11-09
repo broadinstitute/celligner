@@ -7,9 +7,9 @@
 run_MNN(
   CCLE_cor,
   TCGA_cor,
-  k1 = global$mnn_k_tumor,
-  k2 = global$mnn_k_CL,
-  ndist = global$mnn_ndist,
+  k1 = celligner_global$mnn_k_tumor,
+  k2 = celligner_global$mnn_k_CL,
+  ndist = celligner_global$mnn_ndist,
   subset_genes
 )
 }
@@ -21,13 +21,13 @@ In the default Celligner pipeline this the cell line data.}
 In the default Celligner pipeline this the tumor data.}
 
 \item{k1:}{the number of neighbors within the data being corrected (by default the tumor data). By default this
-pulls from the global paramter mnn_k_tumor, which by default is 50.}
+pulls from the celligner_global paramter mnn_k_tumor, which by default is 50.}
 
 \item{k2:}{the number of neighbors within the reference data (by default the cell line data). By default this
-pulls from the global parameter mnn_k_CL, which by default is 5.}
+pulls from the celligner_global parameter mnn_k_CL, which by default is 5.}
 
-\item{ndist:}{A numeric scalar specifying the threshold beyond which neighbors are to be ingnored when computing correction vectors.
-By default this pulls from the global parameter mnn_ndist, which by default is 3.}
+\item{ndist:}{A numeric scalar specifying the threshold beyond which neighbors are to be ignored when computing correction vectors.
+By default this pulls from the celligner_global parameter mnn_ndist, which by default is 3.}
 
 \item{subset_genes:}{the subset of genes used for identifying mutual nearest neighbors within the datasets. The set of differentially
 expressed genes is usually passed here.}

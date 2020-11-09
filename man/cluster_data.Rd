@@ -15,5 +15,5 @@ Seurat object with cluster annotations
 }
 \description{
 cluster data in seurat object, using default Seurat clustering method. Clsuters data
-within PCA space using the number of dimensions provided in global$n_PC_dims (default is 70)
+within PCA space using the number of dimensions provided in celligner_global$n_PC_dims (default is 70)
 }

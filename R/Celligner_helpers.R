@@ -1,10 +1,36 @@
 library(magrittr)
 library(tidyverse)
 
-# Differentially expressed genes --------------------------------------------------------------------
+#' check for NAs in the expression data and remove samples with NAs
+#' @name check_NAs
+#'
+#' @param mat: matrix of gene expression data that is samples by genes
+#' @return matrix of gene expression data, removing samples that have NAs
+#' @export
+#'
+check_NAs <- function(mat) {
+  if(length(which(is.na(rowSums(mat))==T))>0) {
+    warning("Removing sample(s) due to NAs in the data")
+    mat <- mat[!is.na(rowSums(mat)),]
+  }
 
-# Estimate linear-model stats for a matrix of data with respect to a group of phenotype variables
+  return(mat)
+}
+
+#'
+#' Differentially expressed genes
+#' @name run_lm_stats_limma_group
+#'
+#' @param mat: Nxp data matrix of N cell lines and p genes
+#' @param phenos: N vector of independent variables. Can be two-group labels as factors, bools, or can be numeric
+#' @param covars: optional Nxk matrix of sample covariates
+#' @param weights: optional N vector of precision weights for each data point
+#' @param target_type: name of the column variable in the data (default 'Gene')
+#' @return table of gene level stata
+#' @description  Estimate linear-model stats for a matrix of data with respect to a group of phenotype variables
 # using limma with empirical Bayes moderated F-stats for p-values
+#' @export
+#'
 run_lm_stats_limma_group <- function (mat, phenos, covars = NULL, weights = NULL, target_type = "Gene",
           limma_trend = FALSE)
 {
@@ -53,12 +79,24 @@ run_lm_stats_limma_group <- function (mat, phenos, covars = NULL, weights = NULL
   return(results)
 }
 
-# cPCA --------------------------------------------------------------------
-
-# run contrastive principal components analysis, first removing average cluster expression, to
-# estimate the average intra-cluster covariance
-# if pc_dims = NULL, all cPCs are calculated. Faster cPCA can be run by setting pc_dims to a
-# value >=4 and approximating just those cPCs
+#'
+#' cPCA
+#' @name run_cPCA_analysis
+#'
+#' @param TCGA_dat: sample by genes matrix of scaled expression data
+#' @param CCLE_dat: sample by genes matrix of scaled expression data
+#' @param tumor_cluster_df: table of sample metadata that includes a column 'seurat_clusters',
+#'  containing transcriptional clusters in the TCGA data
+#' @param CL_cluster_df: table of sample metadata that includes a column 'seurat_clusters',
+#'  containing transcriptional clusters in the CCLE data
+#' @param pc_dims: numbers of cPCs calculated. If set to NULL (default) all cPCs will be calculated, if set to a value
+#' then that number of cPCs will be approximated. Values input should be >= 4.
+#' @return contrastive principal component object containing cPC vectors and values
+#' @description Run contrastive principal components analysis, first removing average cluster expression, to
+# estimate the average intra-cluster covariance. If pc_dims = NULL, all cPCs are calculated. Faster cPCA can be run by setting pc_dims to a
+# value >=4 and approximating just those cPCs.
+#' @export
+#'
 run_cPCA_analysis <- function(TCGA_dat, CCLE_dat, tumor_cluster_df, CL_cluster_df, pc_dims=NULL) {
   tumor_clust_avgs <- get_cluster_averages(TCGA_dat, tumor_cluster_df)
   CL_clust_avgs <- get_cluster_averages(CCLE_dat, CL_cluster_df)
@@ -77,7 +115,17 @@ run_cPCA_analysis <- function(TCGA_dat, CCLE_dat, tumor_cluster_df, CL_cluster_d
   return(cov_diff_eig)
 }
 
-# calculate the average expression per cluster
+#'
+#' calculate the average expression per cluster
+#' @name get_cluster_averages
+#'
+#' @param mat: sample by genes matrix of expression data
+#' @param cluster_df: table of sample metadata that includes a column 'seurat_clusters',
+#' containing transcriptional clusters
+#' @return average cluster expression
+#' @description calculate the average expression per cluster
+#' @export
+#'
 get_cluster_averages <- function(mat, cluster_df) {
   n_clusts <- nlevels(cluster_df$seurat_clusters)
   clust_avgs <- matrix(NA, nrow = n_clusts, ncol = ncol(mat)) %>%
@@ -91,8 +139,25 @@ get_cluster_averages <- function(mat, cluster_df) {
 
 # MNN --------------------------------------------------------------------
 
-# Modification of the scran::fastMNN (https://github.com/MarioniLab/scran)
-# Allows for separate k values per dataset, and simplifies some of the IO and doesn't use PCA reduction
+#'
+#' MNN
+#' @name modified_mnnCorrect
+#'
+#' @param ref_mat: matrix of samples by genes of cPC corrected data that serves as the reference data in the MNN alignment.
+#' In the standard Celligner pipeline this the cell line data.
+#' @param targ_mat: matrix of samples by genes of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
+#' In the standard Celligner pipeline this the tumor data.
+#' @param k1: the number of neighbors within the data being corrected (in standard pipeline the tumor data). By default this is 20.
+#' @param k2: the number of neighbors within the reference data (in standard pipeline the cell line data). By default this is 20.
+#' @param ndist: A numeric scalar specifying the threshold beyond which neighbors are to be ignored when computing correction vectors.
+#' By default is 3.
+#' @param subset_genes: the subset of genes used for identifying mutual nearest neighbors within the datasets. The set of differentially
+#' expressed genes is usually passed here. By default is NULL, meaning all genes are used
+#' @return MNN object, containing the targ_mat corrected data and the mutual nearest neighbor pairs.
+#' @description Mutual nearest neighbors correction. Modification of the scran::fastMNN (https://github.com/MarioniLab/scran).
+#' Allows for separate k values per dataset, and simplifies some of the IO and doesn't use PCA reduction
+#' @export
+#'
 modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
                             ndist = 3, subset_genes = NULL) {
   if (is.null(subset_genes)) {
@@ -126,8 +191,21 @@ modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
   return(final)
 }
 
-# Copied from dev version of scran (2018-10-28) with slight modifications as noted
-#https://github.com/MarioniLab/scran
+#'
+#' calculate the average correction vector
+#' @name .average_correction
+#'
+#' @param refdata: matrix of samples by genes of cPC corrected data that serves as the reference data in the MNN alignment.
+#' In the standard Celligner pipeline this the cell line data.
+#' @param mnn1: mnn1 pairs
+#' @param curdata: matrix of samples by genes of cPC corrected data that is corrected in the MNN alignment and projected onto the reference data.
+#' In the standard Celligner pipeline this the tumor data.
+#' @param mnn2: mnn2 pairs
+#' @return correction vector and pairs
+#' @description Computes correction vectors for each MNN pair, and then averages them for each MNN-involved cell in the second batch.
+#' Copied from dev version of scran (2018-10-28), with slight modifications as noted https://github.com/MarioniLab/scran
+#' @export
+#'
 .average_correction <- function(refdata, mnn1, curdata, mnn2)
   # Computes correction vectors for each MNN pair, and then
   # averages them for each MNN-involved cell in the second batch.
@@ -141,6 +219,17 @@ modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
 }
 
 
+#'
+#' centers samples within each batch
+#' @name .center_along_batch_vector
+#'
+#' @param mat: matrix of samples by genes
+#' @param batch.vec: batch vector
+#' @return correction vector and pairs
+#' @description Projecting along the batch vector, and shifting all samples to the center within each batch.
+#' This removes any variation along the overall batch vector within each matrix.
+#' @export
+#'
 .center_along_batch_vector <- function(mat, batch.vec)
   # Projecting along the batch vector, and shifting all cells to the center _within_ each batch.
   # This removes any variation along the overall batch vector within each matrix.
@@ -152,8 +241,27 @@ modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
   return(mat)
 }
 
+
+#' tricube-weighted correction
+#' @name .tricube_weighted_correction
+#'
+#' @param curdata: target matrix of samples by genes
+#' @param correction: corrected vector
+#' @param in.mnn: mnn pairs
+#' @param k: k values, default 20
+#' @param ndist: A numeric scalar specifying the threshold beyond which neighbors are to be ignored when computing correction vectors.
+#' By default is 3.
+#' @param subset_genes: genes used to identify mutual nearest neighbors
+#' @param BNPARAM: default NULL
+#' @param BPPARAM: default BiocParallel::SerialParam()
+#' @return MNN corrected data
+#' @description Computing tricube-weighted correction vectors for individual samples,
+#' using the nearest neighbouring samples involved in MNN pairs.
+#' Modified to use FNN rather than queryKNN for nearest neighbor finding
+#' @export
 #' @importFrom BiocNeighbors queryKNN
 #' @importFrom BiocParallel SerialParam
+#'
 .tricube_weighted_correction <- function(curdata, correction, in.mnn, k=20, ndist=3, subset_genes, BNPARAM=NULL, BPPARAM=BiocParallel::SerialParam())
   # Computing tricube-weighted correction vectors for individual cells,
   # using the nearest neighbouring cells _involved in MNN pairs_.
@@ -168,6 +276,18 @@ modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
   curdata + weighted.correction
 }
 
+#'
+#' compute tricube averages
+#' @name .compute_tricube_average
+#'
+#' @param values: correction vector
+#' @param indices: nxk matrix for the nearest neighbor indice
+#' @param distances: nxk matrix for the nearest neighbor Euclidea distances
+#' @param bandwidth: Is set at 'ndist' times the median distance, if not specified.
+#' @param ndist: By default is 3.
+#' @description Centralized function to compute tricube averages.
+#' @export
+#'
 .compute_tricube_average <- function(vals, indices, distances, bandwidth=NULL, ndist=3)
   # Centralized function to compute tricube averages.
   # Bandwidth is set at 'ndist' times the median distance, if not specified.

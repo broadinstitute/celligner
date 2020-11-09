@@ -18,5 +18,5 @@ Seurat object with scaled expression data and annotations stored in meta.data
 }
 \description{
 create Seurat object of expression data and annotations and run dimensionality reduction.
-Dimensionality reductions will be run with the parameters (n_PC_dims, umap_n_neighbors, umap_min_dist, distance_metric) specified in global.
+Dimensionality reductions will be run with the parameters (n_PC_dims, umap_n_neighbors, umap_min_dist, distance_metric) specified in celligner_global.
 }
