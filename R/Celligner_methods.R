@@ -530,20 +530,19 @@ calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
 #' if cell_line_taiga=FALSE, then the name of the file of cell line annotations. If pulling from taiga, assumes that the file is the arxspan
 #' file (could also use virtual release sample_info file), if not then assumes it is a local file containing the columns sampleID, lineage, subtype, and type=='CL'.
 #' @param cell_line_ann_version: parameter to specify the version to pull from taiga for the cell line annotations, default set to NULL
-#' @param cell_line_ann_taiga: if TRUE then pulls the cell line annotations from taiga, if FALSE then finds cell line annotations in local folder
+#' @param cell_line_ann_taiga: if TRUE (default) then pulls the cell line annotations from taiga, if FALSE then finds cell line annotations in local folder
 #' @param tumor_data_name: if tumor_taiga = TRUE, then the data.name of the taiga file containing the tumor expression data,
 #' if tumor_taiga=FALSE, then the file path to the local folder containing the tumor expression data.
-#' If pulling from taiga, assumes that the file is the already create Celligner info file used in the Celligner manuscript,
-#'  if not then assumes it is a local file containing the columns sampleID, lineage, subtype, and type=='tumor'.
 #' @param tumor_data_file: if tumor_taiga = TRUE, then the data.file of the taiga file containing the tumor expression data,
 #' if tumor_taiga=FALSE, then the name of the file the tumor expression data
 #' @param tumor_version: parameter to specify the version to pull from taiga for the tumor expression data, default set to NULL
-#' @param tumor_taiga: if TRUE then pulls the tumor expression data from taiga, if FALSE then finds tumor expression data in local folder
+#' @param tumor_taiga: if TRUE (default) then pulls the tumor expression data from taiga, if FALSE then finds tumor expression data in local folder
 #' @param tumor_ann_name: if tumor_taiga = TRUE, then the data.name of the taiga file containing the tumor annotations,
 #' if tumor_taiga=FALSE, then the file path to the local folder containing the tumor annotations
 #' @param tumor_ann_file: if tumor_ann_taiga = TRUE, then the data.file of the taiga file containing the tumor annotations,
-#' if tumor_ann_taiga=FALSE, then the name of the file the tumor annotations
-#' @param tumor_version: parameter to specify the version to pull from taiga for the tumor annotations, default set to NULL
+#' if tumor_ann_taiga=FALSE, then the name of the file the tumor annotations. If pulling from taiga, assumes that the file is the already create Celligner info file used in the Celligner manuscript,
+#'  if not then assumes it is a local file containing the columns sampleID, lineage, subtype, and type=='tumor'.
+#' @param tumor_ann_version: parameter to specify the version to pull from taiga for the tumor annotations, default set to NULL
 #' @param tumor_ann_taiga: if TRUE then pulls the tumor annotations from taiga, if FALSE then finds tumor annotations in local folder
 #' @param additional_annotations_name: if additional_annotations_taiga = TRUE, then the data.name of the taiga file containing the additional annotations,
 #' if additional_annotations_taiga=FALSE, then the file path to the local folder containing the additional annotations. Used to add more fine-grain subtype annotations
@@ -637,22 +636,55 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
   comb_obj <- create_Seurat_object(combined_mat, comb_ann)
   comb_obj <- cluster_data(comb_obj)
 
+  Celligner_res <- Seurat::Embeddings(comb_obj, reduction = 'umap') %>%
+    as.data.frame() %>%
+    magrittr::set_colnames(c('UMAP_1', 'UMAP_2')) %>%
+    tibble::rownames_to_column(var = 'sampleID') %>%
+    dplyr::left_join(comb_obj@meta.data, by = 'sampleID')
+
+  lineage_averages <- Celligner_res %>%
+    dplyr::filter(!lineage %in% c('adrenal_cortex', 'embryo', 'endocrine', 'engineered', 'engineered_blood',
+                           'engineered_breast', 'engineered_central_nervous_system', 'engineered_kidney',
+                           'engineered_lung', 'engineered_ovary', 'engineered_prostate', 'epidermoid_carcinoma',
+                           'nasopharynx', 'nerve','pineal', 'teratoma', 'unknown')) %>%
+    dplyr::group_by(lineage) %>%
+    dplyr::summarise(UMAP_1 = median(UMAP_1, na.rm=T),
+                     UMAP_2 = median(UMAP_2, na.rm=T))
+  lineage_averages$lineage <- gsub("_", " ", lineage_averages$lineage)
+  lineage_lab_aes <- ggplot2::geom_text(data = lineage_averages, mapping = aes(x = UMAP_1, y = UMAP_2, label = lineage), size = 3, color="#000000")
+
+
+  if('type' %in% colnames(Celligner_res) & 'tumor' %in% Celligner_res$type & 'CL' %in% Celligner_res$type) {
+    celligner_plot <- ggplot2::ggplot(Celligner_res,  ggplot2::aes(UMAP_1, UMAP_2)) +
+      ggplot2::geom_point(alpha=0.7, pch=21,  ggplot2::aes(color = type, fill = lineage, size = type)) +
+      ggplot2::scale_color_manual(values = c(tumor = 'white', CL = 'black')) +
+      ggplot2::scale_size_manual(values=c(tumor=0.75, CL=1.5)) +
+      ggplot2::xlab('UMAP 1') + ggplot2::ylab('UMAP 2') +
+      ggplot2::guides(fill=FALSE,
+                      color = ggplot2::guide_legend(override.aes = list(color=c('black', 'white'), fill = c('white','black')))) +
+      ggplot2::theme_classic()
+  } else {
+    celligner_plot <-  ggplot2::ggplot(Celligner_res, ggplot2::aes(UMAP_1, UMAP_2)) +
+      ggplot2::geom_point(alpha=0.7, pch=21, size = 1, ggplot2::aes(fill = lineage)) +
+      ggplot2::xlab('UMAP 1') + ggplot2::ylab('UMAP 2') +
+      ggplot2::theme_classic() + ggplot2::theme(legend.position = 'none')
+  }
+
+  print(celligner_plot)
+  print(celligner_plot + lineage_lab_aes)
+
+
   if(!is.null(save_output)) {
     if(file.exists(save_output)) {
       print('calculating tumor/cell line correlation')
       tumor_CL_cor <- calc_tumor_CL_cor(combined_mat, comb_obj@meta.data)
 
-      Celligner_ouput <- Seurat::Embeddings(comb_obj, reduction = 'umap') %>%
-        as.data.frame() %>%
-        set_colnames(c('UMAP_1', 'UMAP_2')) %>%
-        rownames_to_column(var = 'sampleID') %>%
-        left_join(comb_obj@meta.data, by = 'sampleID')
-
       print('saving files')
       write.csv(tumor_CL_cor, file.path(save_output, 'tumor_CL_cor.csv'))
       write.csv(combined_mat, file.path(save_output, 'Celligner_aligned_data.csv'))
-      write_csv(Celligner_output, file.path(save_output, 'Celligner_info.csv'))
-
+      write_csv(Celligner_res, file.path(save_output, 'Celligner_info.csv'))
+      ggplot2::ggsave(file.path(save_output, 'Celligner_plot.png'), celligner_plot, device='png', width = 8, height = 6)
+      ggplot2::ggsave(file.path(save_output, 'labeled_Celligner_plot.png'), celligner_plot + lineage_lab_aes, device='png', width = 8, height = 6)
 
     } else{
       warning("can't save output, folder does not exist")
