@@ -16,12 +16,6 @@ celligner_global <- list(
   fast_cPCA = 10 # to run fast cPCA (approximate the cPCA eigenvectors instead of calculating all) set this to a value >= 4
 )
 
-table_theme <- gridExtra::ttheme_minimal(
-  core=list(bg_params = list(fill = rep("white",3), col='black'),
-            fg_params=list(fontsize=6)),
-  colhead = list(fg_params=list(col="black", fontsize=7),
-                 bg_params=list(fill="white", col='black')))
-
 tissue_colors <- c(`central_nervous_system`= "#f5899e",`engineered_central_nervous_system` = "#f5899e",
                    `teratoma` = "#f5899e",
                    `bone` = "#9f55bb",
@@ -59,36 +53,3 @@ tissue_colors <- c(`central_nervous_system`= "#f5899e",`engineered_central_nervo
                    `esophagus` = "#6a6c2c",
                    `fibroblast` = "#d8ab6a",
                    `plasma_cell` = "#e6c241")
-
-heatmap_params <- list(
-  na_color = '#666666',
-  title_font_size = 6,
-  row_font_size = 6,
-  column_font_size = 6,
-  font_face = "plain",
-  square_border_color = "white",
-  color_palette = grDevices::colorRampPalette(rev(RColorBrewer::brewer.pal(11, 'YlOrRd')), space='Lab'),
-  color_vector = c('#e3e3e3', rev(grDevices::colorRampPalette(rev(RColorBrewer::brewer.pal(11, 'YlOrRd')), space='Lab')(100)))
-)
-
-EMT_genes <- c("ZEB1", "LIX1L", "VIM", "AXL", 'MMP2', "ANTXR2", "C3ORF21", "FN1", "NRP1", "TGFB1",
-               "GALNT5", "PPARG", "HNMT", "CARD6", "RBPMS", "TNFRSF21", "TMEM45B", "MPP7", "SSH3",
-               "MTAC2D1", "MUC1", "EPPK1", "SHROOM3", "EPN3", "PRSS22", "AP1M2", "SH3YL1", "KLC3",
-               "SERINC2", "EVPL", "FXYD3", "CLDN4", "CRB3", "LRRC54", "MAPK13", "EPPK1", "FALNT3",
-               "STAP2", "AP1M2", "DSP", "ELMO3", "KRTCAP3", "MAL2", "F11R", "GPR110", "GPR56",
-               "KRT19", "GRHL1", "BSPRY", "C1ORF116", "S100A14", "SPINT2", "ANKRD22", "ST14", "GRHL2",
-               "PRR5", "TJP3", "TACSTD2", "CH3", "C1ORD172", "CDS1", "MPZL2","INADL", "EPN3", "RBM35A",
-               "TMC4", "ITGB6", "TMEM125", "EPHA1", "CDS1", "ENPP5", "RAB25", "PRSS8", "TMEM30B",
-               "CLDN7", "RBM35A", "TACSTD1", "CDS1", "SCNN1A", "CDH1")
-
-ALL_marker_genes <- cbind.data.frame(`gene` = c("CD3G", "CD3D", "CD3E", "CD8A", "CD19", "CD22", "CD2",  "CD10"),
-                                    `ensembl` = c("ENSG00000160654", "ENSG00000167286", "ENSG00000198851",
-                                                  "ENSG00000153563", "ENSG00000177455", "ENSG00000012124",
-                                                  "ENSG00000116824", "ENSG00000196549"),
-                                    `type` = c("T-cell", "T-cell", "T-cell", "T-cell", "B-cell", "B-cell", "T-cell",
-                                               "B-cell"))
-
-
-
-
-

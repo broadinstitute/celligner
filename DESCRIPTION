@@ -1,13 +1,27 @@
 Package: celligner
-Title: What the Package Does (One Line, Title Case)
+Title: Celligner pipeline
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Allie",
+           family = "Warren",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+           email = "",
+           comment = c(ORCID = ""))
+Description: R package to run the Celligner method using datasets from taiga. 
+Imports: 
+	tidyverse,
+	reshape2,
+	plyr,
+	data.table,
+	Seurat,
+	pdist,
+	FNN,
+	irlba,
+	limma,
+	batchelor,
+	BiocParallel,
+	BiocManager,
+	taigr
 License: `use_mit_license()`, `use_gpl3_license()` or friends to
     pick a license
 Encoding: UTF-8
