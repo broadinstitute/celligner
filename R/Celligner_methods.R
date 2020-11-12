@@ -624,9 +624,15 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
     cur_vecs <- cov_diff_eig$rotation[, celligner_global$remove_cPCA_dims, drop = FALSE]
   }
 
+  # clear unused objects
+  rm(TCGA_obj); rm(CCLE_obj); gc()
+
   rownames(cur_vecs) <- colnames(dat$TCGA_mat)
   TCGA_cor <- resid(lm(t(dat$TCGA_mat) ~ 0 + cur_vecs)) %>% t()
   CCLE_cor <- resid(lm(t(dat$CCLE_mat) ~ 0 + cur_vecs)) %>% t()
+
+  # clear unused objects
+  rm(dat); gc()
 
   mnn_res <- run_MNN(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
                       subset_genes = DE_gene_set)
@@ -682,7 +688,9 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
       print('saving files')
       write.csv(tumor_CL_cor, file.path(save_output, 'tumor_CL_cor.csv'))
       write.csv(combined_mat, file.path(save_output, 'Celligner_aligned_data.csv'))
-      write_csv(Celligner_res, file.path(save_output, 'Celligner_info.csv'))
+      readr::write_csv(Celligner_res, file.path(save_output, 'Celligner_info.csv'))
+      write.csv(cur_vecs, file.path(save_output, 'cPCs.csv'))
+      readr::write_csv(DE_genes, file.path(save_output, "DE_genes.csv"))
       ggplot2::ggsave(file.path(save_output, 'Celligner_plot.png'), celligner_plot, device='png', width = 8, height = 6)
       ggplot2::ggsave(file.path(save_output, 'labeled_Celligner_plot.png'), celligner_plot + lineage_lab_aes, device='png', width = 8, height = 6)
 
