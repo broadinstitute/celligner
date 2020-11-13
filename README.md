@@ -13,7 +13,7 @@ The package can then be loaded by calling
 library(celligner)
 ```
 
-# Functions
+# run_Celligner
 
 The entire pipeline can be run by calling run_Celligner(). 
 The parameters are:
@@ -66,3 +66,8 @@ It returns:
   - a seurat object containing the Celligner-aligned data, the UMAP dimensionality reduction of the Celligner-aligned data, clustering, sample metadata
   - plots
   - if save_output is given a filepath then output files will be saved to the folder specified
+  
+# multidataset alignment
+
+run_multidataset_alignment() is similar to run_Celligner(), but also aligns the Met500 dataset and two PDX datasets, by default pulling them from taiga. See more notes on multidataset alignment in this google document: https://docs.google.com/document/d/11FvwosKXieYT0sRuyOkjCG1ZiyxYDQohx5-dyrY6LVg/edit?usp=sharing 
+
