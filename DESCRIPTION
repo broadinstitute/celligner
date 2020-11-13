@@ -5,7 +5,7 @@ Authors@R:
     person(given = "Allie",
            family = "Warren",
            role = c("aut", "cre"),
-           email = "",
+           email = "alliecwarren@gmail.com",
            comment = c(ORCID = ""))
 Description: R package to run the Celligner method using datasets from taiga. 
 Imports: 
