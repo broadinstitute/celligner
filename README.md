@@ -100,9 +100,13 @@ Follow the project on our [Asana page](https://app.asana.com/0/482696339531494/l
 
 Please use _github issues_ for any problem related to the tool.
 
+Maintainers:
+
+Jérémie Kalfon @jkobject
+James McFarland
+Javad Noorbak @jnoorbak
+
 Created by: 
 
 Allie Warren @awarren
-
-Jérémie Kalfon @jkobject
 
