@@ -1,16 +1,25 @@
 # Celligner
+from sklearn.linear_model.base import make_dataset
+from sklearn.utils import Parallel
 from celligner.params import *
 from genepy.utils import helper as h
 from genepy.utils import plot
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, IncrementalPCA
+from sklearn.linear_model import LinearRegression
 from genepy.rna import pyDESeq2
-from snn import SNN
+
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/snn/")
+from SNN import snn
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import limma
 from contrastive import CPCA
 import mnnpy
 
 import pandas as pd
 import numpy as np
-import umap
+import umap.umap_ as umap
 import os
 import pickle
 
@@ -28,7 +37,7 @@ def check_Xpression(X_pression, gene_file):
   Returns:
       pd.Dataframe: 
   """
-  common_genes = set(X_pression.columns) & set(gene_file.ensembl_id)
+  common_genes = set(X_pression.columns) & set(gene_file.ensembl_gene_id)
   if len(common_genes) < MIN_GENES:
     raise ValueError("X_pression columns do not match gene_file enough only " +
                     str(len(common_genes))+" common genes")
@@ -53,6 +62,7 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None, pvalue_th
   """
   n_clusts = len(set(clustered))
   print('running differential expression on '+str(n_clusts)+' clusters')
+  clusts = set(clustered)-set([-1])
   #TODO: add covariates
   if clust_covariates:
     if len(clust_covariates) != n_clusts:
@@ -60,46 +70,34 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None, pvalue_th
     design_matrix = clust_covariates
   # make a design matrix
   design_matrix = pd.DataFrame(index=expression.index,
-                              data=[clustered==i for i in range(n_clusts)],
-                              columns=['C'+str(i) for i in range(n_clusts)])
-  formula = '~'+'+'.join(['C'+str(i) for i in range(n_clusts)])
+                              data=np.array([clustered==i for i in clusts]).T,
+                               columns=["C"+ str(i)+"C" for i in clusts])
+  design_matrix.index = design_matrix.index.astype(str).str.replace('-', '.')
+  design_matrix = design_matrix[design_matrix.sum(1) > 0]
   # creating the matrix
   data = expression.T
-  data['gene_id'] = data.index
-  data = data.reset_index(drop=True)
-  # running DESeq2
-  print("running DESeq2 on the samples")
-  # Note: the differentially expressed genes don't make much sense themselves
-  # they are computed by taking the difference across each cluster compared to the 
-  # cluster 1
-  # TODO: use the genes with the greatest variance?
-  deseq = pyDESeq2.pyDESeq2(count_matrix=data, design_matrix=design_matrix,
-                            design_formula=formula, gene_column="gene_id")
-  deseq.run_deseq()
-  deseq.get_deseq_result()
-  r = deseq.deseq_result
-  r.pvalue = np.nan_to_num(np.array(r.pvalue), 1)
-  r.log2FoldChange = np.nan_to_num(np.array(r.log2FoldChange), 0)
-  r = r.set_index("gene_id", drop=True)
-  # TODO: why do we do it across each dataset separatly?
-  # filtereing low p-values
-  return r[(r.p_adj < pvalue_threshold) & (r.log2FoldChange > 0)]
+  data = data[data.columns[clustered!=-1].tolist()]
+  # running limmapy
+  print("running limmapy on the samples")
+  res = limma.limmapy().lmFit(data, design_matrix).eBayes(trend=False).topTable(
+      number=1_000_000_000,).iloc[:,len(clusts):]
+  return res.sort_values(by='F')
 
 
 
 class Celligner(object):
-  def __init__(self, args, gene_file=None, onlyGenes=GENE_TYPE,
+  def __init__(self, args={}, gene_file=None, onlyGenes=GENE_TYPE,
     ensemble_server="http://nov2020.archive.ensembl.org/biomart",
                umap_kwargs=UMAP_PARAMS, pca_kwargs=PCA_PARAMS,
                snn_kwargs=SNN_PARAMS, topKGenes=TOP_K_GENES, cpca_kwargs=CPCA_PARAMS, 
-               cpca_ncomp=CPCA_NCOMP):
+               cpca_ncomp=CPCA_NCOMP, mnn_kwargs=MNN_PARAMS,make_plots=False,):
     """initialize Celligner object
 
     Args:
         args ([type]): [description]
         onlyGenes (str, optional): one of 'usefull', 'all', 'protein_coding'. Defaults to "usefull".
         gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes 
-          and an "ensembl_id", columns. Defaults to None.
+          and an "ensembl_gene_id", columns. Defaults to None.
         ensemble_server (str, optional): [description]. Defaults to "http://nov2020.archive.ensembl.org/biomart".
         umap_kwargs (dict, optional): see umap_pamarameters.md or . Defaults to {}.
     """
@@ -108,7 +106,7 @@ class Celligner(object):
       self.gene_file = gene_file
     else:
       self.gene_file = h.generateGeneNames(ensemble_server=ensemble_server,
-      useCache=True, cache_folder=".genenames/")
+      useCache=True)
       if onlyGenes == "protein_coding":
         print('using only protein coding genes')
         self.gene_file[self.gene_file.gene_biotype == "protein_coding"]
@@ -125,7 +123,9 @@ class Celligner(object):
     self.topKGenes = topKGenes
     self.cpca_kwargs = cpca_kwargs
     self.cpca_ncomp = cpca_ncomp
+    self.mnn_kwargs = mnn_kwargs
     self.number_of_datasets = 0
+    self.make_plots = make_plots
 
     self.clustered = None
     self.fit_input=None
@@ -157,18 +157,21 @@ class Celligner(object):
         ValueError: if the expression matrix and annotations matrix do not have the same index
         ValueError: if the new expression matrix has different gene names than the current one
     """
+    count = X_pression.shape[0]+(self.fit_input.shape[0] if self.fit_input is not None else 0)
+    print('looking at '+str(count)+' samples.')
     fit_input = check_Xpression(X_pression, self.gene_file)
     if annotations:
       if len(annotations) != len(fit_input) or fit_input.index.values != annotations.index.values:
         raise ValueError("annotations do not match X_pression")
     else:
       # create fake annotations
-      annotations = pd.DataFrame(index=self.fit_input.index,
+      annotations = pd.DataFrame(index=X_pression.index,
                                  columns=['cell_type',
                                           'disease_type', 'tissue_type'],
-                                 data=np.zeros((len(self.fit_input), 3))+self.number_of_datasets)
+                                 data=np.zeros((len(X_pression), 3))+self.number_of_datasets)
       
     if self.common_genes is None:
+      # it is the first time we run it.
       print("creating a fit dataset..")
       self.common_genes = fit_input.columns
       self.fit_input = fit_input
@@ -191,13 +194,13 @@ class Celligner(object):
 
     Args:
         X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with 
-          ensembl_id as columns and samplenames as index.
+          ensembl_gene_id as columns and samplenames as index.
         annotations (pd.Dataframe, optional): sample annotations, for each sample, 
           needs to contain ['cell_type', 'disease type', 'tissue type']. 
           Defaults to None (will create an empty dataframe).
     """
     # check if X_pression is compatible with the model
-    if X_pression:
+    if X_pression is not None:
       self.addToFit(X_pression, annotations, dofit=False)
     else:
       if self.fit_input is None:
@@ -207,33 +210,37 @@ class Celligner(object):
     fit_input = self.fit_input.sub(self.fit_input.mean(axis=1), axis=0)
     # dimensionality reduction
     print('reducing dimensionality...')
-    self.fit_reduced = PCA(**self.pca_kwargs).fit_transform(fit_input) if self.doPCA else fit_input
+    self.fit_reduced = PCA(
+        **self.pca_kwargs).fit_transform(fit_input)
     # clustering: doing SNN on the reduced data
     # TODO: try on the full data?
     # TODO: try DBSCAN or spectral clustering instead? (we might want more outliers)
     print('clustering...')
-    self.fit_clusters = SNN(**self.snn_kwargs).fit_predict(self.fit_reduced,
+    self.fit_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.fit_reduced,
         sample_weight=None)
     # do differential expression between clusters and getting the top K most expressed genes
     self.fit_n_clusts = len(set(self.fit_clusters))
+    if self.make_plots:
+      # plotting
+      plot.scatter(umap.UMAP(
+        **self.umap_kwargs).fit_transform(self.fit_reduced), 
+        xname="UMAP1", yname="UMAP2", colors=self.fit_clusters,
+        labels=["C"+str(i) for i in self.fit_clusters],
+        title="SNN clusters", radi=.1)
+    
     print('doing differential expression analysis on the clusters')
     if self.fit_n_clusts < 2:
       print("only one cluster found, no differential expression, using variance...")
-      differential_genes = pd.DataFrame(index=self.fit_input.columns,
-                                             columns=['var'],
-                                             data=self.fit_input.var(axis=0))
+      self.differential_genes_input = pd.DataFrame(index=self.fit_input.columns,
+                                                  columns=['var'],
+                                                  data=self.fit_input.var(axis=0)).sort_values(
+                                                    by='var', ascending=True)
     else:
-      differential_genes = runDiffExprOnCluster(self.fit_input, self.fit_clusters)
+      self.differential_genes_input = runDiffExprOnCluster(
+          self.fit_input, self.fit_clusters)
       # need enough genes to be significant
-      if len(differential_genes) < self.topKGenes:
-        print("not enough differentially expressed genes found, using variance..")
-        differential_genes = pd.DataFrame(index=self.fit_input.columns,
-                                               columns=['var'],
-                                               data=self.fit_input.var(axis=0))
-      else:
-        differential_genes = differential_genes.rename(columns={
-          "log2FoldChange": "var"})
-    self.differential_genes_input = differential_genes.sort_values(by='var', ascending=True)
+      if len(self.differential_genes_input[self.differential_genes_input.F>10]) < self.topKGenes:
+        raise ValueError("not enough differentially expressed genes found, using variance..")
     print('done')
     return self
 
@@ -250,6 +257,9 @@ class Celligner(object):
         ValueError: [description]
         ValueError: [description]
     """
+    count = X_pression.shape[0]+(self.predict_input.shape[0]
+                                 if self.predict_input is not None else 0)
+    print('looking at '+str(count)+' samples.')
     if self.fit_input is None:
       raise ValueError("no fit data available, need to run fit or addToFit first")
     predict_input = check_Xpression(X_pression, self.gene_file)
@@ -258,11 +268,12 @@ class Celligner(object):
         raise ValueError("annotations do not match X_pression")
     else:
       # create fake annotations
-      annotations = pd.DataFrame(index=self.predict_input.index,
+      annotations = pd.DataFrame(index=X_pression.index,
                                  columns=['cell_type',
                                           'disease type', 'tissue type'],
-                                 data=np.zeros((len(self.predict_input), 3))+self.number_of_datasets)
+                                 data=np.zeros((len(X_pression), 3))+self.number_of_datasets)
     if self.predict_input is None:
+      # this is the first time we run it.
       print('creating a predict input..')
       self.predict_input = predict_input
       self.predict_annotations = annotations
@@ -290,7 +301,7 @@ class Celligner(object):
     Raises:
         ValueError: [description]
     """
-    if X_pression:
+    if X_pression is not None:
       self.addToPredict(X_pression, annotations, dopredict=False)
     else:
       if self.predict_input is None:
@@ -302,7 +313,7 @@ class Celligner(object):
     pca_reduced = PCA(**self.pca_kwargs).fit_transform(predict_input)
     # clustering: doing SNN on the reduced data
     print('clustering..')
-    self.predict_clusters = SNN(**self.snn_kwargs).fit_predict(pca_reduced,
+    self.predict_clusters = snn.SNN(**self.snn_kwargs).fit_predict(pca_reduced,
                                               sample_weight=None)
     # do differential expression between clusters and getting the top K most expressed genes
     self.predict_n_clusts = len(set(self.predict_clusters))
@@ -338,11 +349,10 @@ class Celligner(object):
         self.differential_genes_names.append(differential_genes.index[i//2])
     # removing cluster averages to samples clusters
     centered_fit_input = pd.DataFrame()
-    #TODO move to fit
-    centered_predict_input = pd.DataFrame()
     for val in range(self.fit_n_clusts):
       centered_fit_input.loc[self.fit_clusters==val] = self.fit_input.loc[self.fit_clusters==val]\
         - self.fit_input.loc[self.fit_clusters==val].mean(axis=0)
+    centered_predict_input = pd.DataFrame()
     for val in range(self.predict_n_clusts):
       centered_predict_input.loc[self.predict_clusters == val] = self.predict_input.loc[self.predict_clusters == val]\
         - self.predict_input.loc[self.predict_clusters==val].mean(axis=0)
@@ -353,29 +363,30 @@ class Celligner(object):
     # TODO: try to increase values of alpha so that we do not penalize too much the background:
     # TODO: try the automated version, (select the best alpha above 1?)
     cpca_loadings = CPCA(standardize=False, n_components=self.cpca_ncomp).fit(
-        background=centered_predict_input, foreground=centered_fit_input).predict(
-        only_loading=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs)
-
-    # we now remove the first n_components from the predict_input and fit_input
-    # TODO: in Allie's version, we use the top eigenvectors to regress them from the matrix
+      background=centered_predict_input, foreground=centered_fit_input).predict(
+      only_loading=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs)
+    # regress out the cPCA components from the data
+    print('regressing out the cPCA components..')
     # take the residuals of the linear regression of fit_input with the cpca_loadings
-
-     
-    
-    # TODO: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
+    del centered_predict_input, centered_fit_input
+    transformed_fit = self.fit_input - LinearRegression(fit_intercept=False).fit(
+      cpca_loadings, self.predict_input).coef_
+    transformed_predict = self.predict_input - LinearRegression(fit_intercept=False).fit(
+      cpca_loadings, self.fit_input).coef_
     
     # TODO: can we just do mnn and do almost as good?
     # TODO: how come we take the top K genes from a transformed matrix where we removed key axes of variances?
+
+    # TODO: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
     # TODO: in Allie's version MNN vectors are applied to the entire cluster
-
     # TODO: in Allie's version each of the two dataset gets aligned by taking half of the vector
-
     # TODO: in Allie's version, the MNN vectors are computed with different values of K for the two datasets
     self.corrected = mnnpy.mnn_correct(transformed_fit,
                                   transformed_predict,
                                   **self.mnn_kwargs)
-    corrected_fit = self.corrected.loc[:len(transformed_fit)]
-    corrected_predict = self.corrected.loc[len(transformed_fit):]
+    del transformed_fit, transformed_predict
+    corrected_fit = self.corrected.loc[:len(self.fit_input)]
+    corrected_predict = self.corrected.loc[len(self.predict_input):]
     # TODO: recompute MNN vectors with the corrected data and apply a tricube weighting for the neighboring lines
     print("done")
     if return_predict:
@@ -389,7 +400,7 @@ class Celligner(object):
     self.fit(fit_X_pression, fit_annotations)
     return self.predict(predict_X_pression, predict_annotations)
 
-  def score(self): 
+  #def score(self): 
     # do GSEA on the cPCAs
     # 
 
@@ -486,6 +497,7 @@ class Celligner(object):
           data = self.fit_reduced.append(self.predict_reduced)
           annotations = annotations.append(self.predict_annotations)
     # doing UMAP
+    self.umap_kwargs.update(umap_kwargs)
     umap_reduced=umap.UMAP(
         **umap_kwargs).fit_transform(data)
     # plotting

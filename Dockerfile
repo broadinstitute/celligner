@@ -76,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends apt-utils && \
   dependencies=TRUE, repos='http://cran.rstudio.com/'); \
   font_import();\
   loadfonts();\
-  BiocManager::install(c('GSEABase','Seurat','batchelor','limma','org.Hs.eg.db','GenomicRanges','DESeq2',''))\
+  BiocManager::install(c('GSEABase','Seurat','batchelor','limma','org.Hs.eg.db','GenomicRanges','DESeq2'))\
   devtools::install_github('broadinstitute/taigr');\
   devtools::install_github('broadinstitute/celligner');\
   " &&\

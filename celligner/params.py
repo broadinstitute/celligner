@@ -38,28 +38,29 @@ TISSUE_COLOR = {
   "plasma_cell": "#e6c241"
 }
 
-USEFUL_GENE_BIOTYPES = {"rRNA",
-                "Mt_rRNA",
-                "TR_V_gene",
-                "IG_J_gene",
-                "TEC",
-                "TR_D_gene",
-                "snoRNA",
-                "snRNA",
-                "IG_V_gene",
-                "scRNA",
-                "vault_RNA",
-                "lncRNA",
-                "miRNA",
-                "scaRNA",
-                "ribozyme",
-                "protein_coding",
-                "TR_C_gene",
-                "sRNA",
-                "TR_J_gene",
-                "IG_D_gene",
-                "IG_C_gene",
-                }
+USEFUL_GENE_BIOTYPES = {
+  "rRNA",
+  "Mt_rRNA",
+  "TR_V_gene",
+  "IG_J_gene",
+  "TEC",
+  "TR_D_gene",
+  "snoRNA",
+  "snRNA",
+  "IG_V_gene",
+  "scRNA",
+  "vault_RNA",
+  "lncRNA",
+  "miRNA",
+  "scaRNA",
+  "ribozyme",
+  "protein_coding",
+  "TR_C_gene",
+  "sRNA",
+  "TR_J_gene",
+  "IG_D_gene",
+  "IG_C_gene",
+}
 
 MIN_GENES = 5000
 
@@ -265,10 +266,9 @@ UMAP_PARAMS = {
   "n_components": 2,
 }
 
-
 # @see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
 PCA_PARAMS = {
-    'n_components': 70,
+  'n_components': 70,
 }
 
 """
@@ -281,13 +281,13 @@ SNN parameters:
   Note: Naming conventions for attributes are based on the analogous ones of DBSCAN
 """
 SNN_PARAMS = {
-    "neighbor_num": 20,
-    "min_shared_neighbor_proportion": 1/15,
+  "neighbor_num": 20,
+  "min_shared_neighbor_proportion": 1/15,
 }
 
 # @see https://github.com/abidlabs/contrastive README
 CPCA_PARAMS = {
-    "alpha_value": 1
+  "alpha_value": 1
 }
 
 """

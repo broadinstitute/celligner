@@ -1,0 +1,6 @@
+[submodule "celligner/snn"]
+	path = celligner/snn
+	url = https://github.com/albert-espin/snn-clustering.git
+[submodule "celligner/contrastive"]
+	path = celligner/contrastive
+	url = https://github.com/jkobject/contrastive.git

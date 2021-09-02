@@ -28,7 +28,9 @@ a docker image is available at: [jkobject/celligner](https://hub.docker.com/r/jk
 
 the Dockerfile is listed in this repo.
 
-## run_Celligner
+for now you will need to copy your taiga secret file to the docker first
+
+## run Celligner
 
 The package can be loaded by calling
 ``` r
