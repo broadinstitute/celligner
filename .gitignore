@@ -5,7 +5,7 @@
 ### PERSO ###
 data/*
 
-
+*.code-workspace
 ### macOS ###
 # General
 .DS_Store
