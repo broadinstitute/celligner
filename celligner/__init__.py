@@ -339,32 +339,29 @@ class Celligner(object):
       - self.fit_input.loc[self.fit_clusters==val].mean(axis=0) for val in set(self.fit_clusters)])
     centered_transform_input = pd.concat([self.transform_input.loc[self.transform_clusters == val]\
       - self.transform_input.loc[self.transform_clusters==val].mean(axis=0) for val in set(self.transform_clusters)])
-
     # doing cPCA on the dataset
     print('doing cPCA..')
     # TODO: try the automated version, (select the best alpha above 1?)
     cpca_loadings = CPCA(standardize=False, n_components=self.cpca_ncomp, low_memory=self.low_mem).fit(
-      background=centered_transform_input, foreground=centered_fit_input).transform(
-      only_loadings=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs)
+      background=centered_transform_input, foreground=centered_fit_input, preprocess_with_pca_dim=centered_fit_input.shape[1]
+      ).transform(only_loadings=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs).T
     # regress out the cPCA components from the data
     print('regressing out the cPCA components..')
     # take the residuals of the linear regression of fit_input with the cpca_loadings
     del centered_transform_input, centered_fit_input
-    import pdb; pdb.set_trace()
     transformed_fit = self.fit_input - LinearRegression(fit_intercept=False).fit(
-      cpca_loadings.T, self.transform_input.T).coef_.T
+      cpca_loadings, self.fit_input.T).predict(cpca_loadings).T
     transformed_transform = self.transform_input - LinearRegression(fit_intercept=False).fit(
-      cpca_loadings.T, self.fit_input.T).coef_.T
+      cpca_loadings, self.transform_input.T).predict(cpca_loadings).T
     
     # TODO: how come we take the top K genes from a transformed matrix where we removed key axes of variances?
     # TODO: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
-    
-    varsubset = np.array([1 if i in self.topKGenes else 0 for i in self.transform_input.columns]).astype(bool)
-    self.corrected = mnnpy.mnn_correct(transformed_fit,
-                                  transformed_transform,
-                                  var_index=list(range(len(transformed_fit.columns))) 
-                                  #var_subset=varsubset,
-                                  **self.mnn_kwargs)
+    import pdb; pdb.set_trace()
+    varsubset = np.array([1 if i in self.differential_genes_names else 0 for i in self.transform_input.columns]).astype(bool)
+    self.corrected = mnnpy.mnn_correct(transformed_fit.values.astype(float),
+                                      transformed_transform.values.astype(float),
+                                      var_index=np.array(list(range(len(transformed_fit.columns)))).astype(int),
+                                      **self.mnn_kwargs)
     del transformed_fit, transformed_transform
     self.corrected = pd.DataFrame(self.corrected, index=list(self.fit_input.index)+list(self.transform_input.index),
       columns=self.fit_input.columns)
