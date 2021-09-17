@@ -4,9 +4,17 @@ from genepy.utils import helper as h
 from genepy.utils import plot
 from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.linear_model import LinearRegression
+import mnnpy
+from scanpy.tl import louvain
+from anndata import AnnData
 
 import os
 import sys
+
+import pandas as pd
+import numpy as np
+import umap.umap_ as umap
+import pickle
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/snn/")
 from SNN import snn
@@ -14,12 +22,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import limma
 sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/contrastive/")
 from contrastive import CPCA
-import mnnpy
-
-import pandas as pd
-import numpy as np
-import umap.umap_ as umap
-import pickle
 
 def check_Xpression(X_pression, gene_file):
   """
@@ -208,9 +210,9 @@ class Celligner(object):
     pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
     self.fit_reduced = pca.fit_transform(fit_input)
     # clustering: doing SNN on the reduced data
-    # TODO: try on the full data?
-    # TODO: try DBSCAN or spectral clustering instead? (we might want more outliers)
     print('clustering...')
+    #anndata from df
+    adata = AnnData(self.fit_reduced)
     self.fit_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.fit_reduced,
         sample_weight=None)
     # do differential expression between clusters and getting the top K most expressed genes
@@ -280,10 +282,10 @@ class Celligner(object):
       self.transform_input = self.transform_input.append(transform_input)
     self.number_of_datasets +=1
     if dotransform:
-      return self.transform(return_transform=True)
+      return self.transform(only_transform=True)
 
 
-  def transform(self, X_pression=None, annotations=None, return_transform=False):
+  def transform(self, X_pression=None, annotations=None, only_transform=False):
     """transform the cell type for each sample in X_pression
 
     Args:
@@ -354,30 +356,31 @@ class Celligner(object):
     transformed_transform = self.transform_input - LinearRegression(fit_intercept=False).fit(
       cpca_loadings, self.transform_input.T).predict(cpca_loadings).T
     
-    # TODO: how come we take the top K genes from a transformed matrix where we removed key axes of variances?
-    # TODO: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
+    # TODO?: how come we take the top K genes from a transformed matrix where we removed key axes of variances?
+    # TODO?: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
     import pdb; pdb.set_trace()
     varsubset = np.array([1 if i in self.differential_genes_names else 0 for i in self.transform_input.columns]).astype(bool)
-    self.corrected = mnnpy.mnn_correct(transformed_fit.values.astype(float),
-                                      transformed_transform.values.astype(float),
-                                      var_index=np.array(list(range(len(transformed_fit.columns)))).astype(int),
-                                      **self.mnn_kwargs)
+    self.corrected, mnn_pairs, _  = mnnpy.mnn_correct(transformed_fit.values, 
+                      transformed_transform.values,
+                      var_index=list(range(len(transformed_fit.columns))),
+                      **self.mnn_kwargs)
     del transformed_fit, transformed_transform
     self.corrected = pd.DataFrame(self.corrected, index=list(self.fit_input.index)+list(self.transform_input.index),
       columns=self.fit_input.columns)
 
-    corrected_fit = self.corrected.loc[:len(self.fit_input)]
-    corrected_transform = self.corrected.loc[len(self.fit_input):]
+    corrected_fit = self.corrected.iloc[:len(self.fit_input)]
+    corrected_transform = self.corrected.iloc[len(self.fit_input):]
     # TODO: recompute MNN vectors with the corrected data and apply a tricube weighting for the neighboring lines
+    self.mnn_pairs = mnn_pairs[-1]
     print("done")
-    if return_transform:
+    if only_transform:
       return corrected_transform
     else:
-      return corrected_transform, corrected_fit
+      return corrected_transform, corrected_fit, mnn_pairs
 
 
   def fit_transform(self, fit_X_pression=None, fit_annotations=None, 
-    transform_X_pression=None, transform_annotations=None, return_transform=False):
+    transform_X_pression=None, transform_annotations=None, only_transform=False):
     self.fit(fit_X_pression, fit_annotations)
     return self.transform(transform_X_pression, transform_annotations)
 
@@ -410,6 +413,7 @@ class Celligner(object):
         h.listToFile(self.differential_genes_names, os.path.join(folder, 'data', 'differential_genes_names.csv'))
         self.corrected.to_csv(os.path.join(folder, 'data', 'corrected.csv'), index=None)
         self.transform_reduced.to_csv(os.path.join(folder, 'data', 'transform_reduced.csv'), index=None)
+        self.mnn_pairs.to_csv(os.path.join(folder, 'data', 'mnn_pairs.csv'), index=None)
 
 
   def load(self, folder):
@@ -432,6 +436,7 @@ class Celligner(object):
         self.transform_clusters = h.fileToList(os.path.join(folder, 'data', 'transform_clusters.csv'))
         self.differential_genes_names = h.fileToList(os.path.join(folder, 'data', 'differential_genes_names.csv'))
         self.corrected = pd.read_csv(os.path.join(folder, 'data', 'corrected.csv'))
+        self.mnn_pairs = pd.read_csv(os.path.join(folder, 'data', 'mnn_pairs.csv'))
     else:
       # load the model
       with open(os.path.join(folder, 'model.pkl'), 'rb') as f:
@@ -453,7 +458,8 @@ class Celligner(object):
           data= self.corrected[:len(self.fit_input)]
       else:
         data = self.fit_reduced
-        ann = self.fit_annotations
+      ann = self.fit_annotations
+      clusts = ["fit_C"+str(i) for i in self.fit_clusters]
     elif onlytransform:
       if corrected:
         if self.corrected is None:
@@ -464,8 +470,10 @@ class Celligner(object):
       else:
         data = self.transform_reduced
       ann = self.transform_annotations
+      clusts = ["transform_C"+str(i) for i in self.transform_clusters]
     else:
       ann = self.fit_annotations
+      clusts = ["fit_C"+str(i) for i in self.fit_clusters]
       if corrected:
         if self.corrected is None:
           print('no corrected data')
@@ -473,12 +481,14 @@ class Celligner(object):
         else:
           data=self.corrected
           ann = ann.append(self.transform_annotations)
+          clusts.extend(["transform_C"+str(i) for i in self.transform_clusters])
       else:
         if self.transform_reduced is None:
           data = self.fit_reduced
         else:
           data = self.fit_reduced.append(self.transform_reduced)
           ann = ann.append(self.transform_annotations)
+          clusts.extend(["transform_C"+str(i) for i in self.transform_clusters])
     # doing UMAP
     self.umap_kwargs.update(umap_kwargs)
     umap_reduced=umap.UMAP(
@@ -486,18 +496,18 @@ class Celligner(object):
     if annotations is None:
       annotations = ann
     # plotting
-    if show_clusts:
-      plot_kwargs['labels'].update({'clusters': self.fit_clusters})
-    # TODO: manage annotations
     if 'labels' not in plot_kwargs and annotations is not None:
-      # make annotations into a dict
-      ann 
-      plot_kwargs.update({'labels':annotations})
+      # annotations to dict
+      plot_kwargs['labels'] = {k: list(v) for k, v in annotations.T.iterrows()}
+      plot_kwargs['labels'].update({'clusters': clusts})
     if 'colors' not in plot_kwargs:
-      l = list(set(annotations[color_column]))
-      col = { l[i]:i for i in range(len(l))}
-      plot_kwargs.update({'colors':[col[x] for x in annotations[color_column].tolist()]})
-    # TODO managee colors
+      if show_clusts:
+        col = { l: i for i, l in enumerate(set(clusts))}
+        plot_kwargs.update({'colors':[col[x] for x in clusts]})
+      else:
+        col = { l: i for i, l in enumerate(set(annotations[color_column]))}
+        plot_kwargs.update({'colors':[col[x] for x in annotations[color_column].tolist()]})
+    # managing size
     if "importance" not in plot_kwargs:
       # 1 for all fit and 0 for all predict
       imp = np.zeros(len(data))
@@ -512,4 +522,6 @@ class Celligner(object):
       plot_kwargs.update({'yname':'UMAP2'})
     if 'title' not in plot_kwargs:
       plot_kwargs.update({'title':'Celligner plot'})
+    if 'radi' not in plot_kwargs:
+      plot_kwargs.update({'radi':0.1})
     plot.scatter(umap_reduced, **plot_kwargs)
