@@ -4,7 +4,7 @@
 # Edit at https://www.gitignore.io/?templates=r,macos,python,sublimetext
 ### PERSO ###
 data/*
-
+**.so
 *.code-workspace
 ### macOS ###
 # General
