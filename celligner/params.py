@@ -361,7 +361,7 @@ MNN_PARAMS = {
   "var_adj": True,
   "svd_mode": "rsvd",
   "svd_dim": None,
-  "k": 20,
+  #"k": 20,
 }
 
 # number of dimensions to reduce to in the embedding

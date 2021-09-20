@@ -10,6 +10,14 @@ from scanpy.pp import neighbors
 from anndata import AnnData
 # import louvain
 # import pynndescent
+from os import cpu_count
+from multiprocessing import Pool
+from functools import partial
+
+from scipy.spatial import cKDTree
+from scipy.sparse import issparse
+from numba import jit, float32, int32, int8
+
 import os
 import sys
 
@@ -85,7 +93,33 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None, pvalue_th
       number=len(data)).iloc[:,len(clusts):]
   return res.sort_values(by='F')
 
-def marioniCorrect(ref_mat, targ_mat, k, ndist, subset_genes, **mnn_kwargs):
+@jit((float32[:, :], float32[:, :], int8, int8, int8))
+def find_mutual_nn(data1, data2, k1, k2, n_jobs):
+    k_index_1 = cKDTree(data1).query(x=data2, k=k1, n_jobs=n_jobs)[1]
+    k_index_2 = cKDTree(data2).query(x=data1, k=k2, n_jobs=n_jobs)[1]
+    mutual_1 = []
+    mutual_2 = []
+    for index_2 in range(data2.shape[0]):
+        for index_1 in k_index_1[index_2]:
+            if index_2 in k_index_2[index_1]:
+                mutual_1.append(index_1)
+                mutual_2.append(index_2)
+    return mutual_1, mutual_2
+
+def transform_input_data(datas, cos_norm_in, cos_norm_out, n_jobs):
+  datas = [data.toarray().astype(np.float32) if issparse(data) else data.astype(np.float32) for data in datas]
+  same_set = cos_norm_in == cos_norm_out
+  in_batches = datas
+  with Pool(n_jobs) as p_n:
+    in_scaling = p_n.map(l2_norm, in_batches)
+  in_scaling = [scaling[:, None] for scaling in in_scaling]
+  if cos_norm_in:
+    with Pool(n_jobs) as p_n:
+      in_batches = p_n.starmap(scale_rows, zip(in_batches, in_scaling))
+  return in_batches
+
+
+def marioniCorrect(ref_mat, targ_mat, k, ndist, var_index=None, var_subset=None, n_jobs=None):
   """marioniCorrect is a function that corrects for batch effects using the Marioni method.
 
   Args:
@@ -96,26 +130,39 @@ def marioniCorrect(ref_mat, targ_mat, k, ndist, subset_genes, **mnn_kwargs):
     mnn_kwargs (dict): args to mnnCorrect
 
   Returns:
-      pd.Dataframe: corrected dataframe
+    pd.Dataframe: corrected dataframe
   """
-  if "var_subset" in mnn_kwargs:
-    ref_mat = ref_mat.loc[:, mnn_kwargs["var_subset"]]
-    targ_mat = targ_mat.loc[:, mnn_kwargs["var_subset"]]
-  # find mutual nearest neighbors
-  corrected, mnn_pairs, _  = mnnpy.mnn_correct(ref_mat, targ_mat, **mnn_kwargs)
+  if n_jobs is None:
+    n_jobs = cpu_count()
+  n_cols = ref_mat.shape[1]
+  if len(var_index) != n_cols:
+    raise ValueError('The number of vars is not equal to the length of var_index.')
+  if targ_mat.shape[1] != n_cols:
+    raise ValueError('The input matrices have inconsistent number of columns.')
+
+  if var_subset is not None:
+    ref_mat = ref_mat.loc[:, var_subset]
+    targ_mat = targ_mat.loc[:, var_subset]
+
+  print('Performing cosine normalization...')
+  in_batches = transform_input_data(ref_mat, targ_mat, 
+    cos_norm_in=True, cos_norm_out=True, var_index=var_index, var_subset=None, n_jobs=n_jobs)
+  print('  Looking for MNNs...')
+  ref_mat, targ_mat = in_batches
+  mnn_ref, mnn_targ = find_mutual_nn(data1=ref_mat, data2=targ_mat, k1=k1, k2=k2, n_jobs=n_jobs)
+
   # make a dataframe
-  mnn_pairs = pd.DataFrame(mnn_pairs).rename(columns={'first':'ref_ID', 'second':'targ_ID', 'pair':'pair'})
+  #mnn_pairs = pd.DataFrame(data=mnn_pairs, columns=['first', 'second'])#, 'pair':'pair'})
   # compute the overall batch vector
-  ave_out = _averageCorrection(ref_mat, sets['first'], targ_mat, sets['second'])
+  ave_out = _averageCorrection(ref_mat, mnn_ref, targ_mat, mnn_targ)
   overall_batch = ave_out['averaged'].mean(axis=0)
   # remove variation along the overall batch vector
   ref_mat = _centerAlongBatchVector(ref_mat, overall_batch)
   targ_mat = _centerAlongBatchVector(targ_mat, overall_batch)
   # recompute correction vectors and apply them
-  re_ave_out = _averageCorrection(ref_mat, sets['first'], targ_mat, sets['second'])
+  re_ave_out = _averageCorrection(ref_mat, mnn_ref, targ_mat, mnn_targ)
   targ_mat = _tricubeWeightedCorrection(targ_mat, re_ave_out['averaged'], re_ave_out['second'], k=k, ndist=ndist)
-  final = {'corrected':targ_mat, 'pairs':mnn_pairs}
-  return final
+  return targ_mat, mnn_pairs
 
 def _averageCorrection(refdata, mnn1, curdata, mnn2):
   """_averageCorrection computes correction vectors for each MNN pair, and then averages them for each MNN-involved cell in the second batch.
@@ -129,10 +176,9 @@ def _averageCorrection(refdata, mnn1, curdata, mnn2):
   Returns:
       dict: correction vector and pairs
   """
-  corvec = refdata.iloc[mnn1] - curdata.iloc[mnn2]
-  corvec = corvec.sum(axis=0)
   npairs = pd.Series(mnn2).value_counts()
-  #stopifnot(npairs.index.equals(corvec.index))
+  corvec = (refdata.iloc[mnn1] - curdata.iloc[mnn2]).sum()
+  
   corvec = corvec/npairs
   return {'averaged':corvec, 'second':npairs.index.astype(int)}
 
@@ -161,9 +207,6 @@ def _tricubeWeightedCorrection(curdata, correction, in_mnn, k=20, ndist=3):
       in_mnn (pandas.DataFrame): mnn pairs
       k (int, optional): k values, default 20
       ndist (int, optional): A numeric scalar specifying the threshold beyond which neighbors are to be ignored when computing correction vectors.
-      subset_genes (list, optional): genes used to identify mutual nearest neighbors
-      BNPARAM (None, optional): default None
-      BPPARAM (None, optional): default BiocParallel::SerialParam()
   """
   cur_uniq = curdata.iloc[in_mnn]
   safe_k = min(k, cur_uniq.shape[0])
@@ -489,6 +532,7 @@ class Celligner(object):
     self.corrected, self.mnn_pairs, self.other  = mnnpy.mnn_correct(transformed_fit.values, 
                       transformed_transform.values,
                       var_index=list(range(len(transformed_fit.columns))),
+                      k1=50, k2=5,
                       **self.mnn_kwargs)
     import pdb; pdb.set_trace()
     del transformed_fit, transformed_transform
