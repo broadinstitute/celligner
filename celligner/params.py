@@ -364,6 +364,10 @@ MNN_PARAMS = {
   #"k": 20,
 }
 
+LOUVAIN_PARAMS = {
+  'resolution': 5,
+}
+
 # number of dimensions to reduce to in the embedding
 CPCA_NCOMP = 4
 

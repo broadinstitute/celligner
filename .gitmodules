@@ -3,4 +3,7 @@ path = celligner/contrastive
 url = https://github.com/jkobject/contrastive.git
 [submodule "celligner/mnnpy"]
 path = celligner/mnnpy
-url = https://github.com/pinin4fjords/mnnpy.git
+url = https://github.com/jkobject/mnnpy.git
+[submodule "celligner/snn"]
+path = celligner/snn
+url = https://github.com/albert-espin/snn-clustering.git

@@ -256,7 +256,7 @@ class Celligner(object):
                umap_kwargs=UMAP_PARAMS, pca_kwargs=PCA_PARAMS,
                snn_kwargs=SNN_PARAMS, topKGenes=TOP_K_GENES, cpca_kwargs=CPCA_PARAMS, 
                cpca_ncomp=CPCA_NCOMP, mnn_kwargs=MNN_PARAMS, make_plots=False,
-               low_mem=False,): #scneigh_kwargs=SCneigh_PARAMS
+               low_mem=False, louvain_kwargs=LOUVAIN_PARAMS): #scneigh_kwargs=SCneigh_PARAMS
     """initialize Celligner object
 
     Args:
@@ -293,6 +293,7 @@ class Celligner(object):
     self.number_of_datasets = 0
     self.make_plots = make_plots
     self.low_mem = low_mem
+    self.louvain_kwargs = louvain_kwargs
     #self.scneigh_kwargs = scneigh_kwargs
 
     self.fit_input=None
@@ -373,15 +374,18 @@ class Celligner(object):
     fit_input = self.fit_input.sub(self.fit_input.mean(axis=1), axis=0)
     # dimensionality reduction
     print('reducing dimensionality...')
-    pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-    self.fit_reduced = pca.fit_transform(fit_input)
+    self.pca_fit = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+    if _rerun:
+      self.fit_reduced = self.pca_fit.fit_transform(fit_input)
+    else:
+      self.fit_reduced = self.pca_fit.transform(fit_input)
     # clustering: doing SNN on the reduced data
     print('clustering...')
     #anndata from df
     adata = AnnData(self.fit_reduced)
     neighbors(adata) # **scneigh_kwargs
-    louvain(adata)
-    self.fit_clusters = adata.obs['louvain'].values
+    louvain(adata, **self.louvain_kwargs)
+    self.fit_clusters = adata.obs['louvain'].values.astype(int)
     del adata
     #self.fit_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.fit_reduced,
     #    sample_weight=None)
@@ -452,6 +456,7 @@ class Celligner(object):
       self.transform_input = self.transform_input.append(transform_input)
     self.number_of_datasets +=1
     if dotransform:
+      len()
       return self.transform(only_transform=True)
 
 
@@ -473,12 +478,18 @@ class Celligner(object):
     transform_input = self.transform_input.sub(self.transform_input.mean(axis=1), axis=0)
     # dimensionality reduction
     print('reducing dimensionality...')
-    pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-    pca_reduced = pca.fit_transform(transform_input)
+    self.pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+    pca_reduced = self.pca.fit_transform(transform_input)
     # clustering: doing SNN on the reduced data
     print('clustering..')
-    self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(pca_reduced,
-                                              sample_weight=None)
+    #anndata from df
+    adata = AnnData(pca_reduced)
+    neighbors(adata) # **scneigh_kwargs
+    louvain(adata, **self.louvain_kwargs)
+    self.transform_clusters = adata.obs['louvain'].values.astype(int)
+    del adata
+    #self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(pca_reduced,
+    #                                          sample_weight=None)
     if self.make_plots:
       # plotting
       plot.scatter(umap.UMAP(
