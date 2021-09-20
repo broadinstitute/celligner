@@ -285,6 +285,16 @@ SNN_PARAMS = {
   "min_shared_neighbor_proportion": 1/15,
 }
 
+SCneigh_PARAMS = {
+  "n_neighbors": 15,
+  #"min_shared_neighbor_proportion": 1/15,
+}
+
+SCneigh_PARAMS = {
+  "neighbor_num": 20,
+  "min_shared_neighbor_proportion": 1/15,
+}
+
 # @see https://github.com/abidlabs/contrastive README
 CPCA_PARAMS = {
   "alpha_value": 1
