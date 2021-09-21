@@ -352,9 +352,11 @@ class Celligner(object):
     self.number_of_datasets +=1
     if dofit:
       return self.fit()
+    else: 
+      return self.fit(_rerun=False)
 
 
-  def fit(self, X_pression=None, annotations=None):
+  def fit(self, X_pression=None, annotations=None, _rerun=True):
     """fit the model using X_pression
 
     Args:
@@ -456,11 +458,12 @@ class Celligner(object):
       self.transform_input = self.transform_input.append(transform_input)
     self.number_of_datasets +=1
     if dotransform:
-      len()
       return self.transform(only_transform=True)
+    else:
+      return self.transform(_rerun=False)
 
 
-  def transform(self, X_pression=None, annotations=None, only_transform=False):
+  def transform(self, X_pression=None, annotations=None, only_transform=False, _rerun=True):
     """transform the cell type for each sample in X_pression
 
     Args:
@@ -479,7 +482,10 @@ class Celligner(object):
     # dimensionality reduction
     print('reducing dimensionality...')
     self.pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-    pca_reduced = self.pca.fit_transform(transform_input)
+    if _rerun:
+      pca_reduced = self.pca.fit_transform(transform_input)
+    else:
+      pca_reduced = self.pca.transform(transform_input)
     # clustering: doing SNN on the reduced data
     print('clustering..')
     #anndata from df

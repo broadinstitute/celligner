@@ -90,7 +90,7 @@ release:          ## Create a new tag for release.
 .PHONY: docs
 docs:             ## Build the documentation.
 	@echo "building documentation ..."
-	@$(ENV_PREFIX)mkdocs build
+	@$(ENV_PREFIX)mkdocs gh-deploy
 	URL="site/index.html"; xdg-open $$URL || sensible-browser $$URL || x-www-browser $$URL || gnome-open $$URL
 
 .PHONY: switch-to-poetry
