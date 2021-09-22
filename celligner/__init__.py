@@ -93,18 +93,18 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None, pvalue_th
       number=len(data)).iloc[:,len(clusts):]
   return res.sort_values(by='F')
 
-@jit((float32[:, :], float32[:, :], int8, int8, int8))
+#@jit((float32[:, :], float32[:, :], int8, int8, int8))
 def find_mutual_nn(data1, data2, k1, k2, n_jobs):
-    k_index_1 = cKDTree(data1).query(x=data2, k=k1, n_jobs=n_jobs)[1]
-    k_index_2 = cKDTree(data2).query(x=data1, k=k2, n_jobs=n_jobs)[1]
-    mutual_1 = []
-    mutual_2 = []
-    for index_2 in range(data2.shape[0]):
-        for index_1 in k_index_1[index_2]:
-            if index_2 in k_index_2[index_1]:
-                mutual_1.append(index_1)
-                mutual_2.append(index_2)
-    return mutual_1, mutual_2
+  k_index_1 = cKDTree(data1).query(x=data2, k=k1, n_jobs=n_jobs)[1]
+  k_index_2 = cKDTree(data2).query(x=data1, k=k2, n_jobs=n_jobs)[1]
+  mutual_1 = []
+  mutual_2 = []
+  for index_2 in range(data2.shape[0]):
+    for index_1 in k_index_1[index_2]:
+      if index_2 in k_index_2[index_1]:
+        mutual_1.append(index_1)
+        mutual_2.append(index_2)
+  return mutual_1, mutual_2
 
 def transform_input_data(datas, cos_norm_in, cos_norm_out, n_jobs):
   datas = [data.toarray().astype(np.float32) if issparse(data) else data.astype(np.float32) for data in datas]
@@ -161,7 +161,7 @@ def marioniCorrect(ref_mat, targ_mat, k, ndist, var_index=None, var_subset=None,
   targ_mat = _centerAlongBatchVector(targ_mat, overall_batch)
   # recompute correction vectors and apply them
   re_ave_out = _averageCorrection(ref_mat, mnn_ref, targ_mat, mnn_targ)
-  targ_mat = _tricubeWeightedCorrection(targ_mat, re_ave_out['averaged'], re_ave_out['second'], k=k, ndist=ndist)
+  targ_mat = _tricubeWeightedCorrection(targ_mat, re_ave_out['averaged'], re_ave_out['second'], k=k, ndist=ndist, n_jobs=n_jobs)
   return targ_mat, mnn_pairs
 
 def _averageCorrection(refdata, mnn1, curdata, mnn2):
@@ -198,7 +198,7 @@ def _centerAlongBatchVector(mat, batch_vec):
   mat = mat + np.outer(central_loc - batch_loc, batch_vec)
   return mat
 
-def _tricubeWeightedCorrection(curdata, correction, in_mnn, k=20, ndist=3):
+def _tricubeWeightedCorrection(curdata, correction, in_mnn, k=20, ndist=3, n_jobs=1):
   """_tricubeWeightedCorrection computes tricube-weighted correction vectors for individual cells,
 
   Args:
@@ -211,9 +211,10 @@ def _tricubeWeightedCorrection(curdata, correction, in_mnn, k=20, ndist=3):
   cur_uniq = curdata.iloc[in_mnn]
   safe_k = min(k, cur_uniq.shape[0])
   # closest = queryKNN(query=curdata, X=cur_uniq, k=safe_k, BNPARAM=BNPARAM, BPPARAM=BPPARAM)
-  closest = []#FNN.get_knnx(cur_uniq[:, subset_genes], query=curdata[:, subset_genes], k=safe_k)
+  index, distances = cKDTree(cur_uniq).query(x=curdata, k=k, n_jobs=n_jobs)
+  #closest = FNN.get_knnx(cur_uniq[:, subset_genes], query=curdata[:, subset_genes], k=safe_k)
   # weighted_correction = compute_tricube_average(correction, closest['index'], closest['distance'], ndist=ndist)
-  weighted_correction = _compute_tricube_average(correction, closest['nn_index'], closest['nn_dist'], ndist=ndist)
+  weighted_correction = _compute_tricube_average(correction, index, distances, ndist=ndist)
   curdata + weighted_correction
 
 
@@ -263,7 +264,7 @@ class Celligner(object):
         args ([type]): [description]
         onlyGenes (str, optional): one of 'usefull', 'all', 'protein_coding'. Defaults to "usefull".
         gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes 
-          and an "ensembl_gene_id", columns. Defaults to None.
+            and an "ensembl_gene_id", columns. Defaults to None.
         ensemble_server (str, optional): [description]. Defaults to "http://nov2020.archive.ensembl.org/biomart".
         umap_kwargs (dict, optional): see umap_pamarameters.md or . Defaults to {}.
     """
@@ -352,7 +353,7 @@ class Celligner(object):
     self.number_of_datasets +=1
     if dofit:
       return self.fit()
-    else: 
+    elif doAdd: 
       return self.fit(_rerun=False)
 
 
@@ -361,10 +362,10 @@ class Celligner(object):
 
     Args:
         X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with 
-          ensembl_gene_id as columns and samplenames as index.
+            ensembl_gene_id as columns and samplenames as index.
         annotations (pd.Dataframe, optional): sample annotations, for each sample, 
-          needs to contain ['cell_type', 'disease_type', 'tissue_type']. 
-          Defaults to None (will create an empty dataframe).
+            needs to contain ['cell_type', 'disease_type', 'tissue_type']. 
+            Defaults to None (will create an empty dataframe).
     """
     # check if X_pression is compatible with the model
     if X_pression is not None:
@@ -459,7 +460,7 @@ class Celligner(object):
     self.number_of_datasets +=1
     if dotransform:
       return self.transform(only_transform=True)
-    else:
+    elif doAdd:
       return self.transform(_rerun=False)
 
 
@@ -588,8 +589,8 @@ class Celligner(object):
     """save the model to a folder
 
     Args:
-      folder (str): folder to save the model
-      asData (bool): if True, save the model as a dataframe, otherwise save it as a pickle file
+        folder (str): folder to save the model
+        asData (bool): if True, save the model as a dataframe, otherwise save it as a pickle file
 
     """
     # save the model
@@ -624,7 +625,7 @@ class Celligner(object):
     """load the model from a folder
 
     Args:
-      folder (str): folder to load the model from
+        folder (str): folder to load the model from
     """
     # if folder contains data folder
     if os.path.exists(os.path.join(folder, 'data')):
