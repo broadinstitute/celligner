@@ -2,15 +2,31 @@ from setuptools import setup, find_packages
 import sys
 import os
 import io
+import subprocess
 
 if sys.version_info.major < 3 or sys.version_info.minor < 2:
-    raise ValueError("Celligner is only compatible with Python 3.3 and above")
+    raise ValueError("celligner is only compatible with Python 3.3 and above")
 if sys.version_info.minor < 5:
     import warnings
-    warnings.warn("Celligner may not function properly on Python < 3.5")
+    warnings.warn("celligner may not function properly on Python < 3.5")
 
-os.system('git submodule init && git submodule sync')
+#os.system('git submodule init && git submodule sync')
 
+print("trying to install the required limma R package")
+try:
+  subprocess.run(
+    'R -e "if(!requireNamespace(\"BiocManager\", quietly = TRUE)){\
+      install.packages(\"BiocManager\", repos=\"http://cran.us.r-project.org\")};\
+    BiocManager::install(\"limma\");"', shell=True, check=True, 
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+except:
+  print('failed to install limma. \
+    please install R or check your R installation and then install limma with:\
+    R -e \"if(!requireNamespace(\"BiocManager\", quietly = TRUE)){\
+        install.packages(\"BiocManager\", repos=\"http://cran.us.r-project.org\")};\
+      BiocManager::install(c(\"limma\"));\"')
+
+print("Finished!")
 def read(*paths, **kwargs):
   """Read the contents of a text file safely.
   >>> read("celligner", "VERSION")
@@ -37,13 +53,13 @@ def read_requirements(path):
 
 
 setup(
-    name='Celligner',
-    version=read("Celligner", "VERSION"),
+    name='celligner',
+    version=read("celligner", "VERSION"),
     description='A useful module for alligning cell lines to tumors',
     long_description=read("README.md"),
     author='Jeremie Kalfon',
     author_email='jkobject@gmail.com',
-    url="https://github.com/BroadInstitute/Celligner",
+    url="https://github.com/BroadInstitute/celligner",
     packages=find_packages(exclude=["tests", ".github"]),
     package_data={'celligner': ['data/*']},
     python_requires='>=3.5',
