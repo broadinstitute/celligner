@@ -64,7 +64,9 @@ USEFUL_GENE_BIOTYPES = {
 
 MIN_GENES = 5000
 
-DO_PCA = True
+# differentially expressed genes with a rank better than this is in the cell line
+# or tumor data are used to identify mutual nearest neighbors in the MNN alignment step
+TOP_K_GENES=1000
 
 # @see Celligner package
 GENE_TYPE = "usefull"
@@ -285,12 +287,7 @@ SNN_PARAMS = {
   "min_shared_neighbor_proportion": 1/15,
 }
 
-SCneigh_PARAMS = {
-  "n_neighbors": 15,
-  #"min_shared_neighbor_proportion": 1/15,
-}
-
-SCneigh_PARAMS = {
+SC_NEIGH_PARAMS = {
   "neighbor_num": 20,
   "min_shared_neighbor_proportion": 1/15,
 }
@@ -299,6 +296,9 @@ SCneigh_PARAMS = {
 CPCA_PARAMS = {
   "alpha_value": 1
 }
+# number of dimensions to reduce to in the embedding
+CPCA_NCOMP = 4
+
 
 """
 :param datas: `numpy.ndarray` or class:`anndata.AnnData`
@@ -358,30 +358,18 @@ CPCA_PARAMS = {
 """
 # @see https://github.com/chriscainx/mnnpy/blob/master/mnnpy/mnn.py
 MNN_PARAMS = {
-  "var_adj": True,
-  "svd_mode": "rsvd",
-  "svd_dim": None,
-  #"k": 20,
+  "k1":50,
+  "k2":5,
+  "fk": 20,
+  "ndist": 3,
 }
+
+#MNN_PARAMS = {
+#  "var_adj": True,
+#  "svd_mode": "rsvd",
+#  "svd_dim": None,
+#}
 
 LOUVAIN_PARAMS = {
   'resolution': 5,
 }
-
-# number of dimensions to reduce to in the embedding
-CPCA_NCOMP = 4
-
-
-# DESEQ2 parameter for the maximum allowed pvalue (the rest gets filtered out)
-DESEQ_MAX_PVAL = 0.1
-
-# differentially expressed genes with a rank better than this is in the cell line
-# or tumor data are used to identify mutual nearest neighbors in the MNN alignment step
-TOP_K_GENES=1000
-
-MOD_CLUST_RES = 5
-# resolution parameter used for clustering the data
-MNN_NDIST = 3
-# number of PCs to use for dimensionality reduction
-REDUCTION = "umap"
-# 2D projection used for plotting

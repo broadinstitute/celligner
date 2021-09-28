@@ -13,7 +13,7 @@ os.system('git submodule init && git submodule sync')
 
 def read(*paths, **kwargs):
   """Read the contents of a text file safely.
-  >>> read("celligner2", "VERSION")
+  >>> read("celligner", "VERSION")
   '0.1.0'
   >>> read("README.md")
   ...
@@ -49,7 +49,7 @@ setup(
     python_requires='>=3.5',
     install_requires=read_requirements("requirements.txt"),
     entry_points={
-      "console_scripts": ["celligner2 = celligner2.__main__:main"]
+      "console_scripts": ["celligner = celligner.__main__:main"]
     },
     extras_require={"test": read_requirements("requirements-test.txt")},
     classifiers=[
