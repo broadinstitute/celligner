@@ -30,6 +30,7 @@ TISSUE_COLOR = {
  'ovary': "#2ca02c",
  'engineered_ovary': "#2ca02c",
  'uterus': "#98df8a",
+ 'cervix': "#5ab172",
  'prostate': "#637939",
  'engineered_prostate': "#637939",
  'thyroid': "#8c6d31",
@@ -365,8 +366,10 @@ CPCA_NCOMP = 4
 :param batch_categories: `list` or `None`, optional (default: None)
     The batch_categories for AnnData.concatenate. Only valid when do_concatenate and supplying
     AnnData objects.
-:param k: `int`, optional (default: 20)
-    Number of mutual nearest neighbors.
+:param k1: `int`, optional (default: 20)
+    Number of mutual nearest neighbors of 2 in 1.
+:param k2: `int`, optional (default: 20)
+    Number of mutual nearest neighbors of 1 in 2.
 :param sigma: `float`, optional (default: 1)
     The bandwidth of the Gaussian smoothing kernel used to compute the correction vectors.
 :param cos_norm_in: `bool`, optional (default: True)
@@ -402,8 +405,8 @@ CPCA_NCOMP = 4
 """
 # @see https://github.com/chriscainx/mnnpy/blob/master/mnnpy/mnn.py
 MNN_PARAMS = {
-  "k1":50,
-  "k2":5,
+  "k1":5,
+  "k2":50,
 }
 
 #MNN_PARAMS = {

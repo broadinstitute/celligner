@@ -228,14 +228,14 @@ class Celligner(object):
       raise ValueError("no input provided")
   
     # mean center the dataframe
-    fit_input = self.fit_input.sub(self.fit_input.mean(axis=1), axis=0)
+    self.fit_input = self.fit_input.sub(self.fit_input.mean(axis=1), axis=0)
     # dimensionality reduction
     print('reducing dimensionality...')
-    self.pca_fit = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
     if _rerun:
-      self.fit_reduced = self.pca_fit.fit_transform(fit_input)
+      self.pca_fit = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+      self.fit_reduced = self.pca_fit.fit_transform(self.fit_input)
     else:
-      self.fit_reduced = self.pca_fit.transform(fit_input)
+      self.fit_reduced = self.pca_fit.transform(self.fit_input)
     # clustering: doing SNN on the reduced data
     print('clustering...')
     #anndata from df
@@ -350,26 +350,27 @@ class Celligner(object):
     elif self.transform_input is None:
       raise ValueError("no transform Expression data provided")
     # mean center the dataframe
-    transform_input = self.transform_input.sub(self.transform_input.mean(axis=1), axis=0)
+    self.transform_input = self.transform_input.sub(self.transform_input.mean(axis=1), axis=0)
     
     # dimensionality reduction
     print('reducing dimensionality...')
-    self.pca_transform = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
     if _rerun:
-      self.transform_reduced = self.pca_transform.fit_transform(transform_input)
+      self.pca_transform = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+      self.pca_transform = self.pca_transform.fit_transform(self.transform_input)
     else:
-      self.transform_reduced = self.pca_transform.transform(transform_input)
+      self.transform_reduced = self.pca_transform.transform(self.transform_input)
     
-    # clustering: doing SNN on the reduced data
-    print('clustering..')
-    #anndata from df
-    adata = AnnData(self.transform_reduced)
-    neighbors(adata) # **scneigh_kwargs
-    louvain(adata, **self.louvain_kwargs)
-    self.transform_clusters = adata.obs['louvain'].values.astype(int)
-    del adata
-    #self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.transform_reduced,
-    #                                          sample_weight=None)
+    if _rerun:
+      # clustering: doing SNN on the reduced data
+      print('clustering..')
+      #anndata from df
+      adata = AnnData(self.transform_reduced)
+      neighbors(adata) # **scneigh_kwargs
+      louvain(adata, **self.louvain_kwargs)
+      self.transform_clusters = adata.obs['louvain'].values.astype(int)
+      del adata
+      #self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.transform_reduced,
+      #                                          sample_weight=None)
 
     if self.make_plots:
       # plotting
@@ -377,7 +378,7 @@ class Celligner(object):
         **self.umap_kwargs).fit_transform(np.vstack([self.fit_reduced, self.transform_reduced])), 
         xname="UMAP1", yname="UMAP2", colors=list(self.fit_clusters)+list(self.transform_clusters+len(set(self.fit_clusters))),
         labels=["fit_C"+str(i) for i in self.fit_clusters]+["transform_C"+str(i) for i in self.transform_clusters],
-        title="SNN clusters", radi=.1, importance=[1]*len(self.fit_reduced) + [0]*len(self.transform_reduced))
+        title="SNN clusters", radi=.1, importance=[0]*len(self.fit_reduced) + [1]*len(self.transform_reduced))
     
     # do differential expression between clusters and getting the top K most expressed genes
     print('doing differential expression analysis on the clusters..')
@@ -552,7 +553,7 @@ class Celligner(object):
 
   def plot(self, onlyfit=False, onlytransform=False, corrected=True, umap_kwargs={},
            plot_kwargs={}, color_column="cell_type", show_clusts=False,annotations = None,
-           smaller="fit", rerun=True, colortable=None,):
+           smaller="predict", rerun=True, colortable=None,):
     """plot the model
 
     Args:
@@ -572,9 +573,7 @@ class Celligner(object):
       ValueError: model not fitted
     """
     # load the data based on availability
-    if not rerun and self.umap_reduced is not None:
-      self.plot_kwargs.update(plot_kwargs)
-    else:
+    if rerun or self.umap_reduced is None:
       if self.fit_input is None:
         raise ValueError('model not fitted yet')
       if onlyfit:
@@ -619,40 +618,41 @@ class Celligner(object):
           **umap_kwargs).fit_transform(data)
       if annotations is None:
         annotations = ann
-      # plotting
-      if 'labels' not in plot_kwargs and annotations is not None:
-        # annotations to dict
-        plot_kwargs['labels'] = {k: list(v) for k, v in annotations.T.iterrows()}
-        plot_kwargs['labels'].update({'clusters': clusts})
-      if 'colors' not in plot_kwargs:
-        if show_clusts:
-          col = { l: i for i, l in enumerate(set(clusts))}
-          plot_kwargs.update({'colors':[col[x] for x in clusts]})
+      self.umap_reduced = umap_reduced
+      self.annotations = annotations
+      self.clusts = clusts
+    # plotting
+    if 'labels' not in plot_kwargs and self.annotations is not None:
+      # annotations to dict
+      plot_kwargs['labels'] = {k: list(v) for k, v in self.annotations.T.iterrows()}
+      plot_kwargs['labels'].update({'clusters': self.clusts})
+    if 'colors' not in plot_kwargs:
+      if show_clusts:
+        col = { l: i for i, l in enumerate(set(self.clusts))}
+        plot_kwargs.update({'colors':[col[x] for x in self.clusts]})
+      else:
+        if colortable is None:
+          col = { l: i for i, l in enumerate(set(self.annotations[color_column]))}
         else:
-          if colortable is None:
-            col = { l: i for i, l in enumerate(set(annotations[color_column]))}
-          else:
-            col = colortable
-            plot_kwargs.update({"colprovided": True})
-          plot_kwargs.update({'colors':[col[x] for x in annotations[color_column].tolist()]})
-      # managing size
-      if "importance" not in plot_kwargs:
-        # 1 for all fit and 0 for all predict
-        imp = np.zeros(len(data))
-        if smaller == "fit":
-          imp[:len(self.fit_input)]=1
-        else:
-          imp[len(self.fit_input):]=1
-        plot_kwargs.update({'importance':imp})
-      if 'xname' not in plot_kwargs:
-        plot_kwargs.update({'xname':'UMAP1'})
-      if 'yname' not in plot_kwargs:
-        plot_kwargs.update({'yname':'UMAP2'})
-      if 'title' not in plot_kwargs:
-        plot_kwargs.update({'title':'Celligner plot'})
-      if 'radi' not in plot_kwargs:
-        plot_kwargs.update({'radi':0.1})
+          col = colortable
+          plot_kwargs.update({"colprovided": True})
+        plot_kwargs.update({'colors':[col[x] for x in self.annotations[color_column].tolist()]})
+    # managing size
+    if "importance" not in plot_kwargs:
+      # 1 for all fit and 0 for all predict
+      imp = np.zeros(len(data))
+      if smaller == "fit":
+        imp[:len(self.fit_input)]=1
+      else:
+        imp[len(self.fit_input):]=1
+      plot_kwargs.update({'importance':imp})
+    if 'xname' not in plot_kwargs:
+      plot_kwargs.update({'xname':'UMAP1'})
+    if 'yname' not in plot_kwargs:
+      plot_kwargs.update({'yname':'UMAP2'})
+    if 'title' not in plot_kwargs:
+      plot_kwargs.update({'title':'Celligner plot'})
+    if 'radi' not in plot_kwargs:
+      plot_kwargs.update({'radi':0.1})
     print('making plot...')
-    self.umap_reduced = umap_reduced
-    self.plot_kwargs = plot_kwargs
     plot.scatter(self.umap_reduced, **plot_kwargs)
