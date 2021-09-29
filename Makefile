@@ -90,6 +90,7 @@ release:          ## Create a new tag for release.
 .PHONY: docs
 docs:             ## Build the documentation.
 	@echo "building documentation ..."
+	@jupyter nbconvert --to html Celligner_demo.ipynb --output docs/index.html
 	@$(ENV_PREFIX)mkdocs gh-deploy
 	URL="site/index.html"; xdg-open $$URL || sensible-browser $$URL || x-www-browser $$URL || gnome-open $$URL
 

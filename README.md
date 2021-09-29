@@ -14,6 +14,8 @@ see our latest paper on aligning CCLE cell lines with TCGA tumors:
 
 `pip install celligner`
 
+a dockerized version is available at `jkobject:pycelligner`
+
 ## for developers
 
 see `CONTRIBUTING.md`

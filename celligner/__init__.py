@@ -4,19 +4,11 @@ from genepy.utils import helper as h
 from genepy.utils import plot
 from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.linear_model import LinearRegression
-import mnnpy
 from scanpy.tl import louvain
 from scanpy.pp import neighbors
 from anndata import AnnData
 # import louvain
 # import pynndescent
-from os import cpu_count
-from multiprocessing import Pool
-from functools import partial
-
-from scipy.spatial import cKDTree
-from scipy.sparse import issparse
-from numba import jit, float32, int32, int8
 
 import os
 import sys
@@ -25,27 +17,23 @@ import pandas as pd
 import numpy as np
 import umap.umap_ as umap
 import pickle
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/snn/")
-from SNN import snn
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import limma
-sys.path.append(os.path.dirname(os.path.abspath(__file__))+"/contrastive/")
 from contrastive import CPCA
+import mnnpy
+from celligner import limma
 
 def check_Xpression(X_pression, gene_file):
   """
 
   Args:
-      X_pression (pd.Dataframe): [description]
-      gene_file (pd.Dataframe): [description]
+    X_pression (pd.Dataframe): expression data
+    gene_file (pd.Dataframe): gene file with an ensembl_gene_id column
 
   Raises:
-      ValueError: if the number of genes in the expression matrix and the gene file do not match
-      ValueError: if the expression matrix contains nan values
+    ValueError: if the number of genes in the expression matrix and the gene file do not match
+    ValueError: if the expression matrix contains nan values
 
   Returns:
-      pd.Dataframe: 
+    (pd.Dataframe): the expression matrix
   """
   common_genes = set(X_pression.columns) & set(gene_file.ensembl_gene_id)
   if len(common_genes) < MIN_GENES:
@@ -66,9 +54,15 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None,):
   Runs DESEQ2 on the clustered data.
 
   Args:
-    expression: pandas.DataFrameThe expression data.
-    clustered: list 
+    expression (pd.Dataframe): expression data
+    clustered (list): the clusters
+    clust_covariates (pd.Dataframe, optional): covariates for the clustering. Defaults to None.
 
+  Returns:
+    (pd.Dataframe): limmapy results
+
+  Raises:
+    ValueError: if the number of genes in the expression matrix and the gene file do not match
   """
   n_clusts = len(set(clustered))
   print('running differential expression on '+str(n_clusts)+' clusters')
@@ -94,7 +88,7 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None,):
   return res.sort_values(by='F')
 
 class Celligner(object):
-  def __init__(self, args={}, gene_file=None, onlyGenes=GENE_TYPE,
+  def __init__(self, gene_file=None, onlyGenes=GENE_TYPE,
                ensemble_server="http://nov2020.archive.ensembl.org/biomart",
                umap_kwargs=UMAP_PARAMS, pca_kwargs=PCA_PARAMS,
                snn_kwargs=SNN_PARAMS, topKGenes=TOP_K_GENES, cpca_kwargs=CPCA_PARAMS, 
@@ -103,24 +97,23 @@ class Celligner(object):
     """initialize Celligner object
 
     Args:
-        args ([type]): [description]
-        onlyGenes (str, optional): one of 'usefull', 'all', 'protein_coding'. Defaults to "usefull".
-        gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes 
-            and an "ensembl_gene_id", columns. Defaults to None.
-        ensemble_server (str, optional): [description]. Defaults to "http://nov2020.archive.ensembl.org/biomart".
-        umap_kwargs (dict, optional): see umap_pamarameters.md or . Defaults to {}.
-        pca_kwargs (dict, optional): see pca_parameters.md or . Defaults to {}.
-        snn_kwargs (dict, optional): see snn_parameters.md or . Defaults to {}.
-        topKGenes (int, optional): [description]. Defaults to 1000.
-        cpca_kwargs (dict, optional): see cpca_parameters.md or . Defaults to {}.
-        cpca_ncomp (int, optional): [description]. Defaults to 10.
-        mnn_kwargs (dict, optional): see mnn_parameters.md or . Defaults to {}.
-        make_plots (bool, optional): [description]. Defaults to False.
-        low_mem (bool, optional): [description]. Defaults to False.
-        louvain_kwargs (dict, optional): see louvain_parameters.md or . Defaults to {}.
-        method (str, optional): either "mnn_marioni" or "mnn". Defaults to "mnn_marioni".
+      onlyGenes (str, optional): one of 'usefull', 'all', 'protein_coding'. Defaults to "usefull".
+      gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes 
+        and an "ensembl_gene_id", columns. Defaults to None.
+      ensemble_server (str, optional): the ensembl biomart server to map genes to. 
+        Defaults to "http://nov2020.archive.ensembl.org/biomart".
+      umap_kwargs (dict, optional): see params.py . Defaults to {}.
+      pca_kwargs (dict, optional): see see params.py . Defaults to {}.
+      snn_kwargs (dict, optional): see see params.py . Defaults to {}.
+      topKGenes (int, optional): see params.py. Defaults to 1000.
+      cpca_kwargs (dict, optional): see see params.py . Defaults to {}.
+      cpca_ncomp (int, optional): see params.py. Defaults to 10.
+      mnn_kwargs (dict, optional): see params.py . Defaults to {}.
+      make_plots (bool, optional): whether to log multiple plots along the way. Defaults to False.
+      low_mem (bool, optional): adviced if you have less than 32Gb of RAM. Defaults to False.
+      louvain_kwargs (dict, optional): see params.py . Defaults to {}.
+      method (str, optional): either "mnn_marioni" or "mnn". Defaults to "mnn_marioni".
     """
-    self.args = args
     if gene_file:
       self.gene_file = gene_file
     else:
@@ -171,12 +164,12 @@ class Celligner(object):
     """adds expression data to the fit dataframe
 
     Args:
-        X_pression (pd.Dataframe): 
-        annotations (pd.Dataframe, optional): [description]. Defaults to None.
+      X_pression (pd.Dataframe): expression data
+      annotations (pd.Dataframe, optional): sample annotations. Defaults to None.
 
     Raises:
-        ValueError: if the expression matrix and annotations matrix do not have the same index
-        ValueError: if the new expression matrix has different gene names than the current one
+      ValueError: if the expression matrix and annotations matrix do not have the same index
+      ValueError: if the new expression matrix has different gene names than the current one
     """
     count = X_pression.shape[0]+(self.fit_input.shape[0] if self.fit_input is not None else 0)
     print('looking at '+str(count)+' samples.')
@@ -217,11 +210,16 @@ class Celligner(object):
     """fit the model using X_pression
 
     Args:
-        X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with 
-            ensembl_gene_id as columns and samplenames as index.
-        annotations (pd.Dataframe, optional): sample annotations, for each sample, 
-            needs to contain ['cell_type', 'disease_type', 'tissue_type']. 
-            Defaults to None (will create an empty dataframe).
+      X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with 
+        ensembl_gene_id as columns and samplenames as index.
+      annotations (pd.Dataframe, optional): sample annotations, for each sample, 
+        needs to contain ['cell_type', 'disease_type', 'tissue_type']. 
+        Defaults to None (will create an empty dataframe).
+      _rerun (bool, optional): whether to rerun the function entirely or not. Defaults to True.
+
+    Raises:
+        ValueError: if the expression matrix and annotations matrix do not have the same index
+        ValueError: if the new expression matrix has different gene names than the current one
     """
     # check if X_pression is compatible with the model
     if X_pression is not None:
@@ -257,30 +255,43 @@ class Celligner(object):
         labels=["C"+str(i) for i in self.fit_clusters],
         title="SNN clusters", radi=.1)
     
-    print('doing differential expression analysis on the clusters')
     if len(set(self.fit_clusters)) < 2:
       raise ValueError("only one cluster found, no differential expression possible\
         try to change your parameters...")
-    self.differential_genes_input = runDiffExprOnCluster(
-        self.fit_input, self.fit_clusters)
-    # need enough genes to be significant
+    if _rerun:
+      print('doing differential expression analysis on the clusters')
+      self.differential_genes_input = runDiffExprOnCluster(
+          self.fit_input, self.fit_clusters)
+      # need enough genes to be significant
     if len(self.differential_genes_input[self.differential_genes_input.F>10]) < self.topKGenes:
       raise ValueError("not enough differentially expressed genes found..")
     print('done')
     return self
+
+  def putAllToFit(self):
+    """puts all the data to the fit dataframe"""
+    self.fit_annotations = self.fit_annotations.append(self.transform_annotations)
+    self.fit_input = self.fit_input.append(self.transform_input)
+    return self.fit()
 
 
   def addTotransform(self, X_pression, annotations=None, dotransform=True, doAdd=True):
     """adds expression data to the transform dataframe
 
     Args:
-        X_pression (pd.Dataframe): 
-        annotations (pd.Dataframe, optional): [description]. Defaults to None.
+      X_pression (pd.Dataframe): the expression data as RSEM expected counts
+        with ensembl_gene_id as columns and samplenames as index.
+      annotations (pd.Dataframe, optional): sample annotations, for each sample,
+      dotransform (bool, optional): if True, will transform the data. Defaults to True.
+      doAdd (bool, optional): if True, will add the data to the transform dataframe.
+
+    Returns:
+      (, optional): transform()'s output
 
     Raises:
-        ValueError: if the expression matrix and annotations matrix do not have the same index
-        ValueError: if the new expression matrix has different gene names than the current one
-        ValueError: if the model has not been fitted yet
+      ValueError: if the expression matrix and annotations matrix do not have the same index
+      ValueError: if the new expression matrix has different gene names than the current one
+      ValueError: if the model has not been fitted yet
     """
     count = X_pression.shape[0]+(self.transform_input.shape[0]
                                  if self.transform_input is not None and doAdd else 0)
@@ -324,11 +335,15 @@ class Celligner(object):
     """transform the cell type for each sample in X_pression
 
     Args:
-        X_pression ([type], optional): [description]. Defaults to None.
-        annotations ([type], optional): [description]. Defaults to None.
+      X_pression (pd.Dataframe, optional): expression dataframe. Defaults to None.
+      annotations (pd.Dataframe, optional): annotations dataframe. Defaults to None.
+      only_transform (bool, optional): if True, will only transform the dataframe.
+      _rerun (bool, optional): if True, will rerun the PCA and SNN. Defaults to True.
 
     Raises:
-        ValueError: [description]
+      ValueError: if the model has not been fitted yet
+      ValueError: if the expression matrix and annotations matrix do not have the same index
+      ValueError: if the new expression matrix has different gene names than the current one
     """
     if X_pression is not None:
       self.addTotransform(X_pression, annotations, dotransform=False, doAdd=False)
@@ -355,7 +370,7 @@ class Celligner(object):
     del adata
     #self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.transform_reduced,
     #                                          sample_weight=None)
-    
+
     if self.make_plots:
       # plotting
       plot.scatter(umap.UMAP(
@@ -371,6 +386,7 @@ class Celligner(object):
     
     if _rerun:
       differential_genes = runDiffExprOnCluster(self.transform_input, self.transform_clusters)
+    
       # need enough genes to be significant
       if len(differential_genes) < self.topKGenes:
         raise ValueError("not enough differentially expressed genes found, try changing the parameters..")
@@ -416,16 +432,16 @@ class Celligner(object):
     varsubset = np.array([1 if i in self.differential_genes_names else 0 for i in self.transform_input.columns]).astype(bool)
     if self.method == 'mnn_marioni':
       print('doing the MNN analysis using Marioni et al. method..')
-      self.corrected, self.mnn_pairs = mnnpy.marioniCorrect(transformed_transform,
-      transformed_fit, var_index = list(range(len(transformed_fit.columns))), 
-      var_subset=varsubset, **self.mnn_kwargs)
+      self.corrected, self.mnn_pairs = mnnpy.marioniCorrect(transformed_fit,
+        transformed_transform, var_index = list(range(len(transformed_fit.columns))), 
+        var_subset=varsubset, **self.mnn_kwargs)
       #marioniCorrect(transformed_fit.values, 
       #  transformed_transform.values, var_index = list(range(len(transformed_fit.columns))),
       #  var_subset=varsubset, **self.mnn_kwargs)
     elif self.method == "mnn":
       print('doing the MNN analysis using scanPy MNN...')
-      self.corrected, mnn_pairs, self.other  = mnnpy.mnn_correct(transformed_transform.values,
-                        transformed_fit.values, 
+      self.corrected, mnn_pairs, self.other  = mnnpy.mnn_correct(transformed_fit.values,
+                        transformed_transform.values, 
                         var_index=list(range(len(transformed_fit.columns))),
                         varsubset=varsubset,
                         **self.mnn_kwargs)
@@ -450,14 +466,14 @@ class Celligner(object):
     """fit_transform the data and transform the data.
 
     Args:
-        fit_X_pression (pandas.DataFrame): the expression data to fit the model.
-        fit_annotations (pandas.DataFrame): the annotations to fit the model.
-        transform_X_pression (pandas.DataFrame): the expression data to transform.
-        transform_annotations (pandas.DataFrame): the annotations to transform.
-        only_transform (bool): if True, only transform the data.
+      fit_X_pression (pandas.DataFrame): the expression data to fit the model.
+      fit_annotations (pandas.DataFrame): the annotations to fit the model.
+      transform_X_pression (pandas.DataFrame): the expression data to transform.
+      transform_annotations (pandas.DataFrame): the annotations to transform.
+      only_transform (bool): if True, only transform the data.
 
     Returns:
-        pandas.DataFrame: the transformed data.
+      pandas.DataFrame: the transformed data.
     """
     self.fit(fit_X_pression, fit_annotations)
     return self.transform(transform_X_pression, transform_annotations)
@@ -467,9 +483,8 @@ class Celligner(object):
     """save the model to a folder
 
     Args:
-        folder (str): folder to save the model
-        asData (bool): if True, save the model as a dataframe, otherwise save it as a pickle file
-
+      folder (str): folder to save the model
+      asData (bool): if True, save the model as a dataframe, otherwise save it as a pickle file
     """
     # save the model
     if not os.path.exists(folder):
@@ -506,7 +521,7 @@ class Celligner(object):
     """load the model from a folder
 
     Args:
-        folder (str): folder to load the model from
+      folder (str): folder to load the model from
     """
     # if folder contains data folder
     if os.path.exists(os.path.join(folder, 'data')):
@@ -537,22 +552,24 @@ class Celligner(object):
 
   def plot(self, onlyfit=False, onlytransform=False, corrected=True, umap_kwargs={},
            plot_kwargs={}, color_column="cell_type", show_clusts=False,annotations = None,
-           smaller="fit", rerun=True):
+           smaller="fit", rerun=True, colortable=None,):
     """plot the model
 
     Args:
-        onlyfit (bool, optional): if True, only plot the fit data. Defaults to False.
-        onlytransform (bool, optional): if True, only plot the transform data. Defaults to False.
-        corrected (bool, optional): if True, plot the corrected data. Defaults to True.
-        umap_kwargs (dict, optional): kwargs for the umap plot. Defaults to {}.
-        plot_kwargs (dict, optional): kwargs for the plot. Defaults to {}.
-        color_column (str, optional): column to use for color. Defaults to "cell_type".
-        show_clusts (bool, optional): if True, show the clusters. Defaults to True.
-        annotations (pd.DataFrame, optional): annotations to use for the plot if none passed before. Defaults to None.
-        smaller (str, optional): if "fit", plot the fit data smaller. If "transform", plot the transform data smaller.
+      onlyfit (bool, optional): if True, only plot the fit data. Defaults to False.
+      onlytransform (bool, optional): if True, only plot the transform data. Defaults to False.
+      corrected (bool, optional): if True, plot the corrected data. Defaults to True.
+      umap_kwargs (dict, optional): kwargs for the umap plot. Defaults to {}.
+      plot_kwargs (dict, optional): kwargs for the plot. Defaults to {}.
+      color_column (str, optional): column to use for color. Defaults to "cell_type".
+      show_clusts (bool, optional): if True, show the clusters. Defaults to True.
+      annotations (pd.DataFrame, optional): annotations to use for the plot if none passed before. Defaults to None. If None, use the fit annotations.
+      smaller (str, optional): if "fit", plot the fit data smaller. If "transform", plot the transform data smaller. Defaults to "fit".
+      rerun (bool, optional): if True, rerun the umap and plot. Defaults to True.
+      colortable (str, optional): if not None, use this colortable else chooses viridis. Defaults to None.
 
     Raises:
-        ValueError: model not fitted
+      ValueError: model not fitted
     """
     # load the data based on availability
     if not rerun and self.umap_reduced is not None:
@@ -612,8 +629,11 @@ class Celligner(object):
           col = { l: i for i, l in enumerate(set(clusts))}
           plot_kwargs.update({'colors':[col[x] for x in clusts]})
         else:
-          import ipdb; ipdb.set_trace()
-          col = { l: i for i, l in enumerate(set(annotations[color_column]))}
+          if colortable is None:
+            col = { l: i for i, l in enumerate(set(annotations[color_column]))}
+          else:
+            col = colortable
+            plot_kwargs.update({"colprovided": True})
           plot_kwargs.update({'colors':[col[x] for x in annotations[color_column].tolist()]})
       # managing size
       if "importance" not in plot_kwargs:
