@@ -356,7 +356,7 @@ class Celligner(object):
     print('reducing dimensionality...')
     if _rerun:
       self.pca_transform = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-      self.pca_transform = self.pca_transform.fit_transform(self.transform_input)
+      self.transform_reduced = self.pca_transform.fit_transform(self.transform_input)
     else:
       self.transform_reduced = self.pca_transform.transform(self.transform_input)
     
