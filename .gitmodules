@@ -1,0 +1,6 @@
+[submodule "celligner/contrastive"]
+path = celligner/contrastive
+url = https://github.com/jkobject/contrastive.git
+[submodule "celligner/mnnpy"]
+path = celligner/mnnpy
+url = https://github.com/jkobject/mnnpy.git
