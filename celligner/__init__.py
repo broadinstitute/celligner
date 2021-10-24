@@ -239,7 +239,7 @@ class Celligner(object):
     # clustering: doing SNN on the reduced data
     print('clustering...')
     #anndata from df
-    adata = AnnData(self.fit_reduced)
+    adata = AnnData(self.fit_input)
     neighbors(adata) # **scneigh_kwargs
     louvain(adata, **self.louvain_kwargs)
     self.fit_clusters = adata.obs['louvain'].values.astype(int)
@@ -411,7 +411,7 @@ class Celligner(object):
         - self.fit_input.loc[self.fit_clusters==val].mean(axis=0) for val in set(self.fit_clusters)])
       centered_transform_input = pd.concat([self.transform_input.loc[self.transform_clusters == val]\
         - self.transform_input.loc[self.transform_clusters==val].mean(axis=0) for val in set(self.transform_clusters)])
-      
+      import ipdb; ipdb.set_trace()
       # doing cPCA on the dataset
       print('doing cPCA..')
       # TODO: try the automated version, (select the best alpha above 1?)
@@ -447,10 +447,8 @@ class Celligner(object):
                         varsubset=varsubset,
                         **self.mnn_kwargs)
       self.mnn_pairs = mnn_pairs[-1]
-      self.corrected = pd.DataFrame(self.corrected, index=list(self.fit_input.index)+list(self.transform_input.index),
-        columns=self.fit_input.columns)
-      self.fit_input = self.corrected.iloc[:len(self.fit_input)]
-      self.corrected = self.corrected.iloc[len(self.fit_input):]
+      self.corrected = pd.DataFrame(self.corrected[len(self.fit_input):], index=list(self.transform_input.index),
+        columns=self.transform_input.columns)
     del transformed_fit, transformed_transform
 
     print("done")
@@ -552,8 +550,8 @@ class Celligner(object):
       self.__dict__.update(model.__dict__)
 
   def plot(self, onlyfit=False, onlytransform=False, corrected=True, umap_kwargs={},
-           plot_kwargs={}, color_column="cell_type", show_clusts=False,annotations = None,
-           smaller="predict", rerun=True, colortable=None,):
+           color_column="cell_type", show_clusts=False,annotations = None,
+           smaller="predict", rerun=True, colortable=None, **plot_kwargs):
     """plot the model
 
     Args:
@@ -613,9 +611,9 @@ class Celligner(object):
       self.umap_kwargs.update(umap_kwargs)
       print('reducing dimensionality...')
       pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-      data = pca.fit_transform(data)
+      #data = pca.fit_transform(data)
       umap_reduced=umap.UMAP(
-          **umap_kwargs).fit_transform(data)
+          **self.umap_kwargs).fit_transform(data)
       if annotations is None:
         annotations = ann
       self.umap_reduced = umap_reduced
@@ -640,7 +638,7 @@ class Celligner(object):
     # managing size
     if "importance" not in plot_kwargs:
       # 1 for all fit and 0 for all predict
-      imp = np.zeros(len(data))
+      imp = np.zeros(len(self.umap_reduced))
       if smaller == "fit":
         imp[:len(self.fit_input)]=1
       else:
@@ -655,4 +653,6 @@ class Celligner(object):
     if 'radi' not in plot_kwargs:
       plot_kwargs.update({'radi':0.1})
     print('making plot...')
-    plot.scatter(self.umap_reduced, **plot_kwargs)
+    p = plot.scatter(self.umap_reduced, **plot_kwargs)
+    plot_kwargs = {}
+    return p

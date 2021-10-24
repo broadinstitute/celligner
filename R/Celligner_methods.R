@@ -53,197 +53,211 @@ library(tidyverse)
 #' @return dat object with cell line and tumor expression data and annotations
 #' @export
 load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_version, cell_line_taiga,
-                      cell_line_ann_name, cell_line_ann_file,cell_line_ann_version, cell_line_ann_taiga,
+                      cell_line_ann_name, cell_line_ann_file, cell_line_ann_version, cell_line_ann_taiga,
                       tumor_data_name, tumor_data_file, tumor_version, tumor_taiga,
                       tumor_ann_name, tumor_ann_file, tumor_ann_version, tumor_ann_taiga,
                       additional_annotations_name, additional_annotations_file, additional_annotations_version, additional_annotations_taiga,
                       hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga) {
-
-  if(hgnc_taiga) {
+  if (hgnc_taiga) {
     hgnc.complete.set <- taigr::load.from.taiga(data.name = hgnc_data_name, data.version = hgnc_version, data.file = hgnc_data_file)
-    if(is.null(hgnc.complete.set)) {
+    if (is.null(hgnc.complete.set)) {
       stop("HGNC gene file input does not exist on taiga")
     }
   } else {
-    if(file.exists(file.path(hgnc_data_name, hgnc_data_file))) {
+    if (file.exists(file.path(hgnc_data_name, hgnc_data_file))) {
       hgnc.complete.set <- data.table::fread(file.path(hgnc_data_name, hgnc_data_file)) %>%
         as.data.frame()
     } else {
-      stop('HGNC gene file input does not exist')
+      stop("HGNC gene file input does not exist")
     }
   }
 
-  if(!all(c('symbol', 'ensembl_gene_id', 'locus_group') %in% colnames(hgnc.complete.set))) {
-    stop('HGNC gene file does not contain expected columns (symbol, ensembl_gene_id, & locus_group)')
+  if (!all(c("symbol", "ensembl_gene_id", "locus_group") %in% colnames(hgnc.complete.set))) {
+    stop("HGNC gene file does not contain expected columns (symbol, ensembl_gene_id, & locus_group)")
   }
 
-  if(tumor_taiga) {
+  if (tumor_taiga) {
     TCGA_mat <- taigr::load.from.taiga(data.name = tumor_data_name, data.version = tumor_version, data.file = tumor_data_file)
-    if(is.null(TCGA_mat)) {
+    if (is.null(TCGA_mat)) {
       stop("tumor expression data file input does not exist on taiga")
     }
   } else {
-    if(file.exists(file.path(tumor_data_name, tumor_data_file))) {
-      TCGA_mat <-  readr::read_tsv(file.path(tumor_data_name, tumor_data_file)) %>%
+    if (file.exists(file.path(tumor_data_name, tumor_data_file))) {
+      TCGA_mat <- readr::read_tsv(file.path(tumor_data_name, tumor_data_file)) %>%
         as.data.frame() %>%
-        tibble::column_to_rownames('Gene') %>%
+        tibble::column_to_rownames("Gene") %>%
         as.matrix() %>%
         t()
     } else {
-      stop('tumor expression data file input does not exist')
+      stop("tumor expression data file input does not exist")
     }
   }
 
 
-  if(cell_line_taiga) {
+  if (cell_line_taiga) {
     CCLE_mat <- taigr::load.from.taiga(data.name = cell_line_data_name, data.version = cell_line_version, data.file = cell_line_data_file)
-    if(is.null(CCLE_mat)) {
+    if (is.null(CCLE_mat)) {
       stop("cell line expression data file input does not exist on taiga")
     }
+  } else {
+    if (file.exists(file.path(cell_line_data_name, cell_line_data_file))) {
+      CCLE_mat <- readr::read_csv(file.path(cell_line_data_name, cell_line_data_file)) %>%
+        as.data.frame() %>%
+        tibble::column_to_rownames("X1") %>%
+        as.matrix()
     } else {
-      if(file.exists(file.path(cell_line_data_name, cell_line_data_file))) {
-        CCLE_mat <-  readr::read_csv(file.path(cell_line_data_name, cell_line_data_file)) %>%
-          as.data.frame() %>%
-          tibble::column_to_rownames('X1') %>%
-          as.matrix()
-      } else {
-        stop('cell line data file input does not exist')
-      }
+      stop("cell line data file input does not exist")
+    }
   }
 
   # subset gene names to just ensembl IDs
   # add test for this
-  colnames(CCLE_mat) <- stringr::str_match(colnames(CCLE_mat), '\\((.+)\\)')[,2]
+  colnames(CCLE_mat) <- stringr::str_match(colnames(CCLE_mat), "\\((.+)\\)")[, 2]
 
   # convert tumor gene names to ensembl IDs, if needed
-  if(length(grep('ENS', colnames(TCGA_mat))) != ncol(TCGA_mat)) {
-    print('converting TCGA column names from HGNC ids to ensembl ids')
+  if (length(grep("ENS", colnames(TCGA_mat))) != ncol(TCGA_mat)) {
+    print("converting TCGA column names from HGNC ids to ensembl ids")
     common_genes <- dplyr::intersect(colnames(TCGA_mat), hgnc.complete.set$symbol)
-    if(length(common_genes) < 10000) {
-      sprint('only %s genes in overlapping between genes in columns of the tumor data and hgnc dataset')
-      warning('low overlap of genes in tumor data and gene symbol, either tumor data
-              or gene file may not be in correct format')
+    if (length(common_genes) < 10000) {
+      sprint("only %s genes in overlapping between genes in columns of the tumor data and hgnc dataset")
+      warning("low overlap of genes in tumor data and gene symbol, either tumor data
+              or gene file may not be in correct format")
     }
-    TCGA_mat <- TCGA_mat[,common_genes]
+    TCGA_mat <- TCGA_mat[, common_genes]
     hgnc.complete.set <- dplyr::filter(hgnc.complete.set, symbol %in% common_genes)
-    hgnc.complete.set <- hgnc.complete.set[!duplicated(hgnc.complete.set$symbol),]
+    hgnc.complete.set <- hgnc.complete.set[!duplicated(hgnc.complete.set$symbol), ]
     rownames(hgnc.complete.set) <- hgnc.complete.set$symbol
-    hgnc.complete.set <- hgnc.complete.set[common_genes,]
+    hgnc.complete.set <- hgnc.complete.set[common_genes, ]
     colnames(TCGA_mat) <- hgnc.complete.set$ensembl_gene_id
   }
 
 
-  if(cell_line_ann_taiga) {
+  if (cell_line_ann_taiga) {
     CCLE_ann <- taigr::load.from.taiga(data.name = cell_line_ann_name, data.version = cell_line_ann_version, data.file = cell_line_ann_file)
-    column_names <- c('arxspan_id', 'lineage', 'lineage_subtype')
-    if('DepMap_ID' %in% colnames(CCLE_ann)) {
-      column_names[1] <- 'DepMap_ID'
+    column_names <- c("arxspan_id", "lineage", "lineage_subtype")
+    if ("DepMap_ID" %in% colnames(CCLE_ann)) {
+      column_names[1] <- "DepMap_ID"
     }
-    if(is.null(CCLE_ann)) {
-      warning('cell line annotation file does not exist on taiga, creating default annotations')
-      CCLE_ann <- data.frame(sampleID =  rownames(CCLE_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'CL')
+    if (is.null(CCLE_ann)) {
+      warning("cell line annotation file does not exist on taiga, creating default annotations")
+      CCLE_ann <- data.frame(
+        sampleID = rownames(CCLE_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "CL"
+      )
     }
-    if(!all(column_names %in% colnames(CCLE_ann))) {
-      warning('cell line annotation file does not contain expected columns (arxspan_id or DepMap_ID, lineage, & lineage_subtype), creating default annotation file')
-      CCLE_ann <- data.frame(sampleID =  rownames(CCLE_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'CL')
+    if (!all(column_names %in% colnames(CCLE_ann))) {
+      warning("cell line annotation file does not contain expected columns (arxspan_id or DepMap_ID, lineage, & lineage_subtype), creating default annotation file")
+      CCLE_ann <- data.frame(
+        sampleID = rownames(CCLE_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "CL"
+      )
     } else {
-      CCLE_ann <- CCLE_ann[,column_names]
-      colnames(CCLE_ann) <- c('sampleID', 'lineage', 'subtype')
-      CCLE_ann$type <- 'CL'
+      CCLE_ann <- CCLE_ann[, column_names]
+      colnames(CCLE_ann) <- c("sampleID", "lineage", "subtype")
+      CCLE_ann$type <- "CL"
     }
   } else {
-    if(file.exists(file.path(cell_line_ann_name, cell_line_ann_file))) {
+    if (file.exists(file.path(cell_line_ann_name, cell_line_ann_file))) {
       CCLE_ann <- data.table::fread(file.path(cell_line_ann_name, cell_line_ann_file)) %>%
         as.data.frame()
     } else {
-      warning('cell line annotation file does not exist, creating default annotations')
-      CCLE_ann <- data.frame(sampleID =  rownames(CCLE_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'CL')
+      warning("cell line annotation file does not exist, creating default annotations")
+      CCLE_ann <- data.frame(
+        sampleID = rownames(CCLE_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "CL"
+      )
     }
   }
 
-  if(!all(c('sampleID', 'lineage', 'subtype', 'type') %in% colnames(CCLE_ann))) {
-    warning('cell line annotation file does not contain expected columns (sampleID, lineage, subtype & type), creating default annotations')
-    CCLE_ann <- data.frame(sampleID =  rownames(CCLE_mat),
-                           lineage = NA,
-                           subtype = NA,
-                           type = 'CL')
+  if (!all(c("sampleID", "lineage", "subtype", "type") %in% colnames(CCLE_ann))) {
+    warning("cell line annotation file does not contain expected columns (sampleID, lineage, subtype & type), creating default annotations")
+    CCLE_ann <- data.frame(
+      sampleID = rownames(CCLE_mat),
+      lineage = NA,
+      subtype = NA,
+      type = "CL"
+    )
   }
 
-  if(tumor_ann_taiga) {
+  if (tumor_ann_taiga) {
     TCGA_ann <- taigr::load.from.taiga(data.name = tumor_ann_name, data.version = tumor_ann_version, data.file = tumor_ann_file)
-    tumor_column_names <- c('sampleID', 'lineage', 'subtype')
-    if(is.null(TCGA_ann)) {
-      warning('tumor annotation file does not exist on taiga, creating default annotations')
-      TCGA_ann <- data.frame(sampleID =  rownames(TCGA_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'tumor')
+    tumor_column_names <- c("sampleID", "lineage", "subtype")
+    if (is.null(TCGA_ann)) {
+      warning("tumor annotation file does not exist on taiga, creating default annotations")
+      TCGA_ann <- data.frame(
+        sampleID = rownames(TCGA_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "tumor"
+      )
     }
-    if(!all(tumor_column_names %in% colnames(TCGA_ann))) {
-      warning('tumor annotation file does not contain expected columns (sampleID, lineage, & subtype), creating default tumor annotations')
-      TCGA_ann <- data.frame(sampleID =  rownames(TCGA_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'tumor')
+    if (!all(tumor_column_names %in% colnames(TCGA_ann))) {
+      warning("tumor annotation file does not contain expected columns (sampleID, lineage, & subtype), creating default tumor annotations")
+      TCGA_ann <- data.frame(
+        sampleID = rownames(TCGA_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "tumor"
+      )
     } else {
-      TCGA_ann <- TCGA_ann[,tumor_column_names]
-      TCGA_ann$type <- 'tumor'
+      TCGA_ann <- TCGA_ann[, tumor_column_names]
+      TCGA_ann$type <- "tumor"
     }
   } else {
-    if(file.exists(file.path(tumor_ann_name, tumor_ann_file))) {
+    if (file.exists(file.path(tumor_ann_name, tumor_ann_file))) {
       TCGA_ann <- data.table::fread(file.path(tumor_ann_name, tumor_ann_file)) %>%
         as.data.frame()
     } else {
-      warning('tumor annotation file does not exist, creating default annotations')
-      TCGA_ann <- data.frame(sampleID =  rownames(TCGA_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'tumor')
+      warning("tumor annotation file does not exist, creating default annotations")
+      TCGA_ann <- data.frame(
+        sampleID = rownames(TCGA_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "tumor"
+      )
     }
-    if(!all(c('sampleID', 'lineage', 'subtype', 'type') %in% colnames(TCGA_ann))) {
-      warning('tumor annotation file does not contain expected columns (sampleID, lineage, subtype & type), creating default annotations')
-      TCGA_ann <- data.frame(sampleID =  rownames(TCGA_mat),
-                             lineage = NA,
-                             subtype = NA,
-                             type = 'tumor')
+    if (!all(c("sampleID", "lineage", "subtype", "type") %in% colnames(TCGA_ann))) {
+      warning("tumor annotation file does not contain expected columns (sampleID, lineage, subtype & type), creating default annotations")
+      TCGA_ann <- data.frame(
+        sampleID = rownames(TCGA_mat),
+        lineage = NA,
+        subtype = NA,
+        type = "tumor"
+      )
     }
   }
 
-  if(!(is.null(additional_annotations_name) | is.null(additional_annotations_file))) {
-    if(additional_annotations_taiga) {
+  if (!(is.null(additional_annotations_name) | is.null(additional_annotations_file))) {
+    if (additional_annotations_taiga) {
       add_ann <- taigr::load.from.taiga(data.name = additional_annotations_name, data.version = additional_annotations_version, data.file = additional_annotations_file)
-      tumor_column_names <- c('sampleID', 'lineage', 'subtype', 'type')
-      if(is.null(add_ann)) {
-        warning('additional annotation file does not exist on taiga, no additional annotations used')
+      tumor_column_names <- c("sampleID", "lineage", "subtype", "type")
+      if (is.null(add_ann)) {
+        warning("additional annotation file does not exist on taiga, no additional annotations used")
       }
-      if(!all(c('sampleID', 'subtype') %in% colnames(add_ann))) {
-        warning('additional annotation file does not contain expected columns (sampleID & subtype), no additional annotations used')
+      if (!all(c("sampleID", "subtype") %in% colnames(add_ann))) {
+        warning("additional annotation file does not contain expected columns (sampleID & subtype), no additional annotations used")
       } else {
         shared_samples <- intersect(CCLE_ann$sampleID, add_ann$sampleID)
-        CCLE_ann[match(shared_samples, CCLE_ann$sampleID),'subtype'] <- add_ann[match(shared_samples, add_ann$sampleID),'subtype']
+        CCLE_ann[match(shared_samples, CCLE_ann$sampleID), "subtype"] <- add_ann[match(shared_samples, add_ann$sampleID), "subtype"]
       }
     } else {
-    if(file.exists(file.path(additional_annotations_name, additional_annotations_file))) {
-      add_ann <- data.table::fread(file.path(additional_annotations_name, additional_annotations_file)) %>%
-        as.data.frame()
-      if(!all(c('sampleID', 'subtype') %in% colnames(add_ann))) {
-        warning('additional annotation file does not contain expected columns (sampleID & subtype), no additional annotations used')
+      if (file.exists(file.path(additional_annotations_name, additional_annotations_file))) {
+        add_ann <- data.table::fread(file.path(additional_annotations_name, additional_annotations_file)) %>%
+          as.data.frame()
+        if (!all(c("sampleID", "subtype") %in% colnames(add_ann))) {
+          warning("additional annotation file does not contain expected columns (sampleID & subtype), no additional annotations used")
+        } else {
+          shared_samples <- intersect(CCLE_ann$sampleID, add_ann$sampleID)
+          CCLE_ann[match(shared_samples, CCLE_ann$sampleID), "subtype"] <- add_ann[match(shared_samples, add_ann$sampleID), "subtype"]
+        }
       } else {
-        shared_samples <- intersect(CCLE_ann$sampleID, add_ann$sampleID)
-        CCLE_ann[match(shared_samples, CCLE_ann$sampleID),'subtype'] <- add_ann[match(shared_samples, add_ann$sampleID),'subtype']
-      }
-      } else {
-        warning('additional annotation file does not exist, no additional annotations used')
-
+        warning("additional annotation file does not exist, no additional annotations used")
       }
     }
   }
@@ -253,27 +267,27 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
 
   # subset to samples in both the annotation and gene expression matrices, and match ordering between them
   common_cls <- intersect(rownames(CCLE_mat), CCLE_ann$sampleID)
-  if(length(setdiff(rownames(CCLE_mat), CCLE_ann$sampleID))>0) {
-    sprintf('Missing annotations for these cell lines: %s', paste(rownames(CCLE_mat), CCLE_ann$sampleID, collapse=", "))
+  if (length(setdiff(rownames(CCLE_mat), CCLE_ann$sampleID)) > 0) {
+    sprintf("Missing annotations for these cell lines: %s", paste(rownames(CCLE_mat), CCLE_ann$sampleID, collapse = ", "))
   }
 
-  CCLE_mat <- CCLE_mat[common_cls,]
-  CCLE_ann <- CCLE_ann[match(common_cls,CCLE_ann$sampleID),]
+  CCLE_mat <- CCLE_mat[common_cls, ]
+  CCLE_ann <- CCLE_ann[match(common_cls, CCLE_ann$sampleID), ]
 
   common_tumors <- intersect(rownames(TCGA_mat), TCGA_ann$sampleID)
-  if(length(setdiff(rownames(TCGA_mat), common_tumors))>0) {
-    sprintf('Missing annotations for these tumors: %s', paste(rownames(TCGA_mat), common_tumors, collapse=", "))
+  if (length(setdiff(rownames(TCGA_mat), common_tumors)) > 0) {
+    sprintf("Missing annotations for these tumors: %s", paste(rownames(TCGA_mat), common_tumors, collapse = ", "))
   }
-  TCGA_mat <- TCGA_mat[common_tumors,]
-  TCGA_ann <- TCGA_ann[match(common_tumors,TCGA_ann$sampleID),]
+  TCGA_mat <- TCGA_mat[common_tumors, ]
+  TCGA_ann <- TCGA_ann[match(common_tumors, TCGA_ann$sampleID), ]
 
   # subset genes to functional genes
-  func_genes <- dplyr::filter(hgnc.complete.set, !locus_group %in% c('non-coding RNA', 'pseudogene'))$ensembl_gene_id
+  func_genes <- dplyr::filter(hgnc.complete.set, !locus_group %in% c("non-coding RNA", "pseudogene"))$ensembl_gene_id
   genes_used <- intersect(colnames(TCGA_mat), colnames(CCLE_mat))
   genes_used <- intersect(genes_used, func_genes)
 
-  TCGA_mat <- TCGA_mat[,genes_used]
-  CCLE_mat <- CCLE_mat[,genes_used]
+  TCGA_mat <- TCGA_mat[, genes_used]
+  CCLE_mat <- CCLE_mat[, genes_used]
 
 
   return(list(TCGA_mat = TCGA_mat, TCGA_ann = TCGA_ann, CCLE_mat = CCLE_mat, CCLE_ann = CCLE_ann))
@@ -296,45 +310,45 @@ load_data <- function(cell_line_data_name, cell_line_data_file, cell_line_versio
 calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga) {
   common_genes <- intersect(colnames(dat$TCGA_mat), colnames(dat$CCLE_mat))
 
-  if(hgnc_taiga) {
+  if (hgnc_taiga) {
     hgnc.complete.set <- taigr::load.from.taiga(data.name = hgnc_data_name, data.version = hgnc_version, data.file = hgnc_data_file)
-    if(is.null(hgnc.complete.set)) {
+    if (is.null(hgnc.complete.set)) {
       stop("HGNC gene file input does not exist on taiga")
     }
   } else {
-    if(file.exists(file.path(hgnc_data_name, hgnc_data_file))) {
+    if (file.exists(file.path(hgnc_data_name, hgnc_data_file))) {
       hgnc.complete.set <- data.table::fread(file.path(hgnc_data_name, hgnc_data_file)) %>%
         as.data.frame()
     } else {
-      stop('HGNC gene file input does not exist')
+      stop("HGNC gene file input does not exist")
     }
   }
 
-  if(!all(c('symbol', 'ensembl_gene_id', 'locus_group') %in% colnames(hgnc.complete.set))) {
-    stop('HGNC gene file does not contain expected columns (symbol, ensembl_gene_id, & locus_group)')
+  if (!all(c("symbol", "ensembl_gene_id", "locus_group") %in% colnames(hgnc.complete.set))) {
+    stop("HGNC gene file does not contain expected columns (symbol, ensembl_gene_id, & locus_group)")
   }
 
   hgnc.complete.set <- hgnc.complete.set %>%
     dplyr::select(Gene = ensembl_gene_id, Symbol = symbol) %>%
     filter(Gene %in% common_genes)
-  hgnc.complete.set <- hgnc.complete.set[!duplicated(hgnc.complete.set$Gene),]
+  hgnc.complete.set <- hgnc.complete.set[!duplicated(hgnc.complete.set$Gene), ]
   rownames(hgnc.complete.set) <- hgnc.complete.set$Gene
-  hgnc.complete.set <- hgnc.complete.set[common_genes,]
+  hgnc.complete.set <- hgnc.complete.set[common_genes, ]
 
   gene_stats <- data.frame(
-    Tumor_SD = apply(dat$TCGA_mat, 2, sd, na.rm=T),
-    CCLE_SD = apply(dat$CCLE_mat, 2, sd, na.rm=T),
-    Tumor_mean = colMeans(dat$TCGA_mat, na.rm=T),
-    CCLE_mean = colMeans(dat$CCLE_mat, na.rm=T),
+    Tumor_SD = apply(dat$TCGA_mat, 2, sd, na.rm = T),
+    CCLE_SD = apply(dat$CCLE_mat, 2, sd, na.rm = T),
+    Tumor_mean = colMeans(dat$TCGA_mat, na.rm = T),
+    CCLE_mean = colMeans(dat$CCLE_mat, na.rm = T),
     Gene = common_genes,
-    stringsAsFactors = F) %>%
-  dplyr::mutate(max_SD = pmax(Tumor_SD, CCLE_SD, na.rm=T)) #add avg and max SD per gene
+    stringsAsFactors = F
+  ) %>%
+    dplyr::mutate(max_SD = pmax(Tumor_SD, CCLE_SD, na.rm = T)) # add avg and max SD per gene
 
   gene_stats <- left_join(hgnc.complete.set, gene_stats, by = "Gene")
 
   return(gene_stats)
-
-  }
+}
 
 
 #' Method to create seurat objects given an expression matrix and annotation table
@@ -350,25 +364,30 @@ calc_gene_stats <- function(dat, hgnc_data_name, hgnc_data_file, hgnc_version, h
 #'
 create_Seurat_object <- function(exp_mat, ann, type = NULL) {
   seu_obj <- Seurat::CreateSeuratObject(t(exp_mat),
-                                         min.cells = 0,
-                                         min.features = 0,
-                                         meta.data = ann %>%
-                                           magrittr::set_rownames(ann$sampleID))
-  if(!is.null(type)) {
+    min.cells = 0,
+    min.features = 0,
+    meta.data = ann %>%
+      magrittr::set_rownames(ann$sampleID)
+  )
+  if (!is.null(type)) {
     seu_obj@meta.data$type <- type
   }
   # mean center the data, important for PCA
   seu_obj <- Seurat::ScaleData(seu_obj, features = rownames(Seurat::GetAssayData(seu_obj)), do.scale = F)
 
-  seu_obj %<>% Seurat::RunPCA(assay='RNA',
-                               features = rownames(Seurat::GetAssayData(seu_obj)),
-                               npcs = celligner_global$n_PC_dims, verbose = F)
+  seu_obj %<>% Seurat::RunPCA(
+    assay = "RNA",
+    features = rownames(Seurat::GetAssayData(seu_obj)),
+    npcs = celligner_global$n_PC_dims, verbose = F
+  )
 
-  seu_obj %<>% Seurat::RunUMAP(assay = 'RNA', dims = 1:celligner_global$n_PC_dims,
-                                reduction = 'pca',
-                                n.neighbors = celligner_global$umap_n_neighbors,
-                                min.dist =  celligner_global$umap_min_dist,
-                                metric = celligner_global$distance_metric, verbose=F)
+  seu_obj %<>% Seurat::RunUMAP(
+    assay = "RNA", dims = 1:celligner_global$n_PC_dims,
+    reduction = "pca",
+    n.neighbors = celligner_global$umap_n_neighbors,
+    min.dist = celligner_global$umap_min_dist,
+    metric = celligner_global$distance_metric, verbose = F
+  )
 
   return(seu_obj)
 }
@@ -385,20 +404,23 @@ create_Seurat_object <- function(exp_mat, ann, type = NULL) {
 #' @export
 #'
 cluster_data <- function(seu_obj) {
-  seu_obj <- Seurat::FindNeighbors(seu_obj, reduction = 'pca',
-                                    dims = 1:celligner_global$n_PC_dims,
-                                    k.param = 20,
-                                    force.recalc = TRUE,
-                                    verbose = FALSE)
+  seu_obj <- Seurat::FindNeighbors(seu_obj,
+    reduction = "pca",
+    dims = 1:celligner_global$n_PC_dims,
+    k.param = 20,
+    force.recalc = TRUE,
+    verbose = FALSE
+  )
 
-  seu_obj %<>% Seurat::FindClusters(reduction = 'pca',
-                                     resolution = celligner_global$mod_clust_res)
+  seu_obj %<>% Seurat::FindClusters(
+    reduction = "pca",
+    resolution = celligner_global$mod_clust_res
+  )
 
   seu_obj@meta.data$cluster <- seu_obj@meta.data$seurat_clusters
 
   return(seu_obj)
-
-  }
+}
 
 #' Method to find genes that are differentially expressed between clusters within the expression data
 #' @name find_differentially_expressed_genes
@@ -411,23 +433,25 @@ cluster_data <- function(seu_obj) {
 #' @export
 #'
 find_differentially_expressed_genes <- function(seu_obj) {
-  if(nrow(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data'))==0) {
+  if (nrow(Seurat::GetAssayData(seu_obj, assay = "RNA", slot = "scale.data")) == 0) {
     stop("Seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
   }
-  if(!'seurat_clusters' %in% colnames(seu_obj@meta.data)) {
+  if (!"seurat_clusters" %in% colnames(seu_obj@meta.data)) {
     stop("Seurat object doesn't contain the column 'seurat_clusters', run 'cluster_data' first")
   }
   n_clusts <- nlevels(seu_obj@meta.data$seurat_clusters)
   if (n_clusts > 2) {
     cur_DE_genes <- run_lm_stats_limma_group(
-      t(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data')),
+      t(Seurat::GetAssayData(seu_obj, assay = "RNA", slot = "scale.data")),
       seu_obj@meta.data %>% dplyr::select(seurat_clusters),
-      limma_trend = TRUE) %>%
+      limma_trend = TRUE
+    ) %>%
       dplyr::select(Gene, gene_stat = F_stat)
   } else if (n_clusts == 2) {
-    cur_DE_genes <- run_lm_stats_limma(t(Seurat::GetAssayData(seu_obj, assay='RNA', slot='scale.data')),
-                                               seu_obj@meta.data$cluster,
-                                               limma_trend = TRUE) %>%
+    cur_DE_genes <- run_lm_stats_limma(t(Seurat::GetAssayData(seu_obj, assay = "RNA", slot = "scale.data")),
+      seu_obj@meta.data$cluster,
+      limma_trend = TRUE
+    ) %>%
       dplyr::mutate(gene_stat = abs(t_stat)) %>%
       dplyr::select(Gene, gene_stat)
   } else {
@@ -435,7 +459,6 @@ find_differentially_expressed_genes <- function(seu_obj) {
   }
 
   return(cur_DE_genes)
-
 }
 
 #' Method to run contrastive principal components analysis
@@ -453,16 +476,18 @@ find_differentially_expressed_genes <- function(seu_obj) {
 #' @export
 #'
 run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
-  if(nrow(Seurat::GetAssayData(TCGA_obj, assay='RNA', slot='scale.data'))==0) {
+  if (nrow(Seurat::GetAssayData(TCGA_obj, assay = "RNA", slot = "scale.data")) == 0) {
     stop("TCGA seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
   }
-  if(nrow(Seurat::GetAssayData(CCLE_obj, assay='RNA', slot='scale.data'))==0) {
+  if (nrow(Seurat::GetAssayData(CCLE_obj, assay = "RNA", slot = "scale.data")) == 0) {
     stop("CCLE seurat object doesn't have expression data at scale.data, run 'create_Seurat_object' first")
   }
-  cov_diff_eig <- run_cPCA_analysis(t(Seurat::GetAssayData(TCGA_obj, assay='RNA', slot='scale.data')),
-                                    t(Seurat::GetAssayData(CCLE_obj, assay='RNA', slot='scale.data')),
-                                    TCGA_obj@meta.data, CCLE_obj@meta.data, pc_dims=pc_dims)
- return(cov_diff_eig)
+  cov_diff_eig <- run_cPCA_analysis(t(Seurat::GetAssayData(TCGA_obj, assay = "RNA", slot = "scale.data")),
+    t(Seurat::GetAssayData(CCLE_obj, assay = "RNA", slot = "scale.data")),
+    TCGA_obj@meta.data, CCLE_obj@meta.data,
+    pc_dims = pc_dims
+  )
+  return(cov_diff_eig)
 }
 
 #' Method to run mutual nearest neighbors batch correction
@@ -485,10 +510,12 @@ run_cPCA <- function(TCGA_obj, CCLE_obj, pc_dims = NULL) {
 #' @return mutual nearest neighbors object with corrected data for the second dataset provided as input and the mutual nearest neighbors
 #' @export
 #'
-run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
+run_MNN <- function(CCLE_cor, TCGA_cor, k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
                     subset_genes) {
-  mnn_res <- modified_mnnCorrect(CCLE_cor, TCGA_cor, k1 = k1, k2 = k2, ndist = ndist,
-                             subset_genes = subset_genes)
+  mnn_res <- modified_mnnCorrect(CCLE_cor, TCGA_cor,
+    k1 = k1, k2 = k2, ndist = ndist,
+    subset_genes = subset_genes
+  )
 
   return(mnn_res)
 }
@@ -505,10 +532,11 @@ run_MNN <- function(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 =
 #' @export
 #'
 calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
-  tumors_samples <- dplyr::filter(Celligner_info, type=='tumor')$sampleID
-  cl_samples <- dplyr::filter(Celligner_info, type=='CL')$sampleID
-  tumor_CL_cor <- cor(t(Celligner_aligned_data[tumor_samples,]), t(Celligner_aligned_data[cl_samples,]),
-                      use='pairwise')
+  tumors_samples <- dplyr::filter(Celligner_info, type == "tumor")$sampleID
+  cl_samples <- dplyr::filter(Celligner_info, type == "CL")$sampleID
+  tumor_CL_cor <- cor(t(Celligner_aligned_data[tumor_samples, ]), t(Celligner_aligned_data[cl_samples, ]),
+    use = "pairwise"
+  )
 
 
   return(tumor_CL_cor)
@@ -567,35 +595,36 @@ calc_tumor_CL_cor <- function(Celligner_aligned_data, Celligner_info) {
 #' @return seurat object of the Celligner-aligned data
 #' @export
 #'
-run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data_file = 'CCLE_expression_full', cell_line_version = NULL, cell_line_taiga=TRUE,
-                          cell_line_ann_name='arxspan-cell-line-export-f808', cell_line_ann_file = 'ACH',cell_line_ann_version = NULL, cell_line_ann_taiga=TRUE,
-                          tumor_data_name = 'celligner-input-9827', tumor_data_file = 'tumor_expression', tumor_version = NULL, tumor_taiga = TRUE,
-                          tumor_ann_name = 'celligner-input-9827', tumor_ann_file = 'tumor_annotations', tumor_ann_version = NULL, tumor_ann_taiga = TRUE,
-                          additional_annotations_name = 'celligner-input-9827', additional_annotations_file = 'CCLE_annotations', additional_annotations_version = NULL, additional_annotations_taiga = TRUE,
-                          hgnc_data_name = 'hgnc-87ab', hgnc_data_file='hgnc_complete_set', hgnc_version= NULL, hgnc_taiga = TRUE,
+run_Celligner <- function(cell_line_data_name = "public-20q4-a4b3", cell_line_data_file = "CCLE_expression_full", cell_line_version = NULL, cell_line_taiga = TRUE,
+                          cell_line_ann_name = "arxspan-cell-line-export-f808", cell_line_ann_file = "ACH", cell_line_ann_version = NULL, cell_line_ann_taiga = TRUE,
+                          tumor_data_name = "celligner-input-9827", tumor_data_file = "tumor_expression", tumor_version = NULL, tumor_taiga = TRUE,
+                          tumor_ann_name = "celligner-input-9827", tumor_ann_file = "tumor_annotations", tumor_ann_version = NULL, tumor_ann_taiga = TRUE,
+                          additional_annotations_name = "celligner-input-9827", additional_annotations_file = "CCLE_annotations", additional_annotations_version = NULL, additional_annotations_taiga = TRUE,
+                          hgnc_data_name = "hgnc-87ab", hgnc_data_file = "hgnc_complete_set", hgnc_version = NULL, hgnc_taiga = TRUE,
                           save_output = NULL) {
-
   require(magrittr)
   require(tidyverse)
 
-  dat <- load_data(cell_line_data_name, cell_line_data_file, cell_line_version, cell_line_taiga,
-                   cell_line_ann_name, cell_line_ann_file,cell_line_ann_version, cell_line_ann_taiga,
-                   tumor_data_name, tumor_data_file, tumor_version, tumor_taiga,
-                   tumor_ann_name, tumor_ann_file, tumor_ann_version, tumor_ann_taiga,
-                   additional_annotations_name, additional_annotations_file, additional_annotations_version, additional_annotations_taiga,
-                   hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
+  dat <- load_data(
+    cell_line_data_name, cell_line_data_file, cell_line_version, cell_line_taiga,
+    cell_line_ann_name, cell_line_ann_file, cell_line_ann_version, cell_line_ann_taiga,
+    tumor_data_name, tumor_data_file, tumor_version, tumor_taiga,
+    tumor_ann_name, tumor_ann_file, tumor_ann_version, tumor_ann_taiga,
+    additional_annotations_name, additional_annotations_file, additional_annotations_version, additional_annotations_taiga,
+    hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga
+  )
 
   gene_stats <- calc_gene_stats(dat, hgnc_data_name, hgnc_data_file, hgnc_version, hgnc_taiga)
 
   comb_ann <- rbind(
     dat$TCGA_ann %>% dplyr::select(sampleID, lineage, subtype) %>%
-      dplyr::mutate(type = 'tumor'),
+      dplyr::mutate(type = "tumor"),
     dat$CCLE_ann %>% dplyr::select(sampleID, lineage, subtype) %>%
-      dplyr::mutate(type = 'CL')
+      dplyr::mutate(type = "CL")
   )
 
-  TCGA_obj <- create_Seurat_object(dat$TCGA_mat, dat$TCGA_ann, type='tumor')
-  CCLE_obj <- create_Seurat_object(dat$CCLE_mat, dat$CCLE_ann, type='CL')
+  TCGA_obj <- create_Seurat_object(dat$TCGA_mat, dat$TCGA_ann, type = "tumor")
+  CCLE_obj <- create_Seurat_object(dat$CCLE_mat, dat$CCLE_ann, type = "CL")
 
   TCGA_obj <- cluster_data(TCGA_obj)
   CCLE_obj <- cluster_data(CCLE_obj)
@@ -603,102 +632,115 @@ run_Celligner <- function(cell_line_data_name='public-20q4-a4b3', cell_line_data
   tumor_DE_genes <- find_differentially_expressed_genes(TCGA_obj)
   CL_DE_genes <- find_differentially_expressed_genes(CCLE_obj)
 
-  DE_genes <- full_join(tumor_DE_genes, CL_DE_genes, by = 'Gene', suffix = c('_tumor', '_CL')) %>%
+  DE_genes <- full_join(tumor_DE_genes, CL_DE_genes, by = "Gene", suffix = c("_tumor", "_CL")) %>%
     mutate(
       tumor_rank = dplyr::dense_rank(-gene_stat_tumor),
       CL_rank = dplyr::dense_rank(-gene_stat_CL),
-      best_rank = pmin(tumor_rank, CL_rank, na.rm=T)) %>%
-    dplyr::left_join(gene_stats, by = 'Gene')
+      best_rank = pmin(tumor_rank, CL_rank, na.rm = T)
+    ) %>%
+    dplyr::left_join(gene_stats, by = "Gene")
 
   # take genes that are ranked in the top 1000 from either dataset, used for finding mutual nearest neighbors
   DE_gene_set <- DE_genes %>%
     dplyr::filter(best_rank < celligner_global$top_DE_genes_per) %>%
-    .[['Gene']]
+    .[["Gene"]]
 
 
   cov_diff_eig <- run_cPCA(TCGA_obj, CCLE_obj, celligner_global$fast_cPCA)
 
-  if(is.null(celligner_global$fast_cPCA)) {
+  if (is.null(celligner_global$fast_cPCA)) {
     cur_vecs <- cov_diff_eig$vectors[, celligner_global$remove_cPCA_dims, drop = FALSE]
   } else {
     cur_vecs <- cov_diff_eig$rotation[, celligner_global$remove_cPCA_dims, drop = FALSE]
   }
 
   # clear unused objects
-  rm(TCGA_obj); rm(CCLE_obj); gc()
+  rm(TCGA_obj)
+  rm(CCLE_obj)
+  gc()
 
   rownames(cur_vecs) <- colnames(dat$TCGA_mat)
   TCGA_cor <- resid(lm(t(dat$TCGA_mat) ~ 0 + cur_vecs)) %>% t()
   CCLE_cor <- resid(lm(t(dat$CCLE_mat) ~ 0 + cur_vecs)) %>% t()
 
   # clear unused objects
-  rm(dat); gc()
+  rm(dat)
+  gc()
 
-  mnn_res <- run_MNN(CCLE_cor, TCGA_cor,  k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
-                      subset_genes = DE_gene_set)
+  mnn_res <- run_MNN(CCLE_cor, TCGA_cor,
+    k1 = celligner_global$mnn_k_tumor, k2 = celligner_global$mnn_k_CL, ndist = celligner_global$mnn_ndist,
+    subset_genes = DE_gene_set
+  )
 
   combined_mat <- rbind(mnn_res$corrected, CCLE_cor)
 
   comb_obj <- create_Seurat_object(combined_mat, comb_ann)
   comb_obj <- cluster_data(comb_obj)
 
-  Celligner_res <- Seurat::Embeddings(comb_obj, reduction = 'umap') %>%
+  Celligner_res <- Seurat::Embeddings(comb_obj, reduction = "umap") %>%
     as.data.frame() %>%
-    magrittr::set_colnames(c('UMAP_1', 'UMAP_2')) %>%
-    tibble::rownames_to_column(var = 'sampleID') %>%
-    dplyr::left_join(comb_obj@meta.data, by = 'sampleID')
+    magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>%
+    tibble::rownames_to_column(var = "sampleID") %>%
+    dplyr::left_join(comb_obj@meta.data, by = "sampleID")
 
   lineage_averages <- Celligner_res %>%
-    dplyr::filter(!lineage %in% c('adrenal_cortex', 'embryo', 'endocrine', 'engineered', 'engineered_blood',
-                           'engineered_breast', 'engineered_central_nervous_system', 'engineered_kidney',
-                           'engineered_lung', 'engineered_ovary', 'engineered_prostate', 'epidermoid_carcinoma',
-                           'nasopharynx', 'nerve','pineal', 'teratoma', 'unknown')) %>%
+    dplyr::filter(!lineage %in% c(
+      "adrenal_cortex", "embryo", "endocrine", "engineered", "engineered_blood",
+      "engineered_breast", "engineered_central_nervous_system", "engineered_kidney",
+      "engineered_lung", "engineered_ovary", "engineered_prostate", "epidermoid_carcinoma",
+      "nasopharynx", "nerve", "pineal", "teratoma", "unknown"
+    )) %>%
     dplyr::group_by(lineage) %>%
-    dplyr::summarise(UMAP_1 = median(UMAP_1, na.rm=T),
-                     UMAP_2 = median(UMAP_2, na.rm=T))
+    dplyr::summarise(
+      UMAP_1 = median(UMAP_1, na.rm = T),
+      UMAP_2 = median(UMAP_2, na.rm = T)
+    )
   lineage_averages$lineage <- gsub("_", " ", lineage_averages$lineage)
-  lineage_lab_aes <- ggplot2::geom_text(data = lineage_averages, mapping = aes(x = UMAP_1, y = UMAP_2, label = lineage), size = 3, color="#000000")
+  lineage_lab_aes <- ggplot2::geom_text(data = lineage_averages, mapping = aes(x = UMAP_1, y = UMAP_2, label = lineage), size = 3, color = "#000000")
 
 
-  if('type' %in% colnames(Celligner_res) & 'tumor' %in% Celligner_res$type & 'CL' %in% Celligner_res$type) {
-    celligner_plot <- ggplot2::ggplot(Celligner_res,  ggplot2::aes(UMAP_1, UMAP_2)) +
-      ggplot2::geom_point(alpha=0.7, pch=21,  ggplot2::aes(color = type, fill = lineage, size = type)) +
-      ggplot2::scale_color_manual(values = c(tumor = 'white', CL = 'black')) +
-      ggplot2::scale_size_manual(values=c(tumor=0.75, CL=1.5)) +
-      ggplot2::xlab('UMAP 1') + ggplot2::ylab('UMAP 2') +
-      ggplot2::guides(fill=FALSE,
-                      color = ggplot2::guide_legend(override.aes = list(color=c('black', 'white'), fill = c('white','black')))) +
+  if ("type" %in% colnames(Celligner_res) & "tumor" %in% Celligner_res$type & "CL" %in% Celligner_res$type) {
+    celligner_plot <- ggplot2::ggplot(Celligner_res, ggplot2::aes(UMAP_1, UMAP_2)) +
+      ggplot2::geom_point(alpha = 0.7, pch = 21, ggplot2::aes(color = type, fill = lineage, size = type)) +
+      ggplot2::scale_color_manual(values = c(tumor = "white", CL = "black")) +
+      ggplot2::scale_size_manual(values = c(tumor = 0.75, CL = 1.5)) +
+      ggplot2::xlab("UMAP 1") +
+      ggplot2::ylab("UMAP 2") +
+      ggplot2::guides(
+        fill = FALSE,
+        color = ggplot2::guide_legend(override.aes = list(color = c("black", "white"), fill = c("white", "black")))
+      ) +
       ggplot2::theme_classic()
   } else {
-    celligner_plot <-  ggplot2::ggplot(Celligner_res, ggplot2::aes(UMAP_1, UMAP_2)) +
-      ggplot2::geom_point(alpha=0.7, pch=21, size = 1, ggplot2::aes(fill = lineage)) +
-      ggplot2::xlab('UMAP 1') + ggplot2::ylab('UMAP 2') +
-      ggplot2::theme_classic() + ggplot2::theme(legend.position = 'none')
+    celligner_plot <- ggplot2::ggplot(Celligner_res, ggplot2::aes(UMAP_1, UMAP_2)) +
+      ggplot2::geom_point(alpha = 0.7, pch = 21, size = 1, ggplot2::aes(fill = lineage)) +
+      ggplot2::xlab("UMAP 1") +
+      ggplot2::ylab("UMAP 2") +
+      ggplot2::theme_classic() +
+      ggplot2::theme(legend.position = "none")
   }
 
   print(celligner_plot)
   print(celligner_plot + lineage_lab_aes)
 
 
-  if(!is.null(save_output)) {
-    if(file.exists(save_output)) {
-      print('calculating tumor/cell line correlation')
+  if (!is.null(save_output)) {
+    if (file.exists(save_output)) {
+      print("calculating tumor/cell line correlation")
       tumor_CL_cor <- calc_tumor_CL_cor(combined_mat, comb_obj@meta.data)
 
-      print('saving files')
-      write.csv(tumor_CL_cor, file.path(save_output, 'tumor_CL_cor.csv'))
-      write.csv(combined_mat, file.path(save_output, 'Celligner_aligned_data.csv'))
-      readr::write_csv(Celligner_res, file.path(save_output, 'Celligner_info.csv'))
-      write.csv(cur_vecs, file.path(save_output, 'cPCs.csv'))
+      print("saving files")
+      write.csv(tumor_CL_cor, file.path(save_output, "tumor_CL_cor.csv"))
+      write.csv(combined_mat, file.path(save_output, "Celligner_aligned_data.csv"))
+      readr::write_csv(Celligner_res, file.path(save_output, "Celligner_info.csv"))
+      write.csv(cur_vecs, file.path(save_output, "cPCs.csv"))
       readr::write_csv(DE_genes, file.path(save_output, "DE_genes.csv"))
-      ggplot2::ggsave(file.path(save_output, 'Celligner_plot.png'), celligner_plot, device='png', width = 8, height = 6)
-      ggplot2::ggsave(file.path(save_output, 'labeled_Celligner_plot.png'), celligner_plot + lineage_lab_aes, device='png', width = 8, height = 6)
-
-    } else{
+      ggplot2::ggsave(file.path(save_output, "Celligner_plot.png"), celligner_plot, device = "png", width = 8, height = 6)
+      ggplot2::ggsave(file.path(save_output, "labeled_Celligner_plot.png"), celligner_plot + lineage_lab_aes, device = "png", width = 8, height = 6)
+    } else {
       warning("can't save output, folder does not exist")
     }
   }
 
   return(comb_obj)
 }
-
