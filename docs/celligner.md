@@ -1,7 +1,7 @@
 # Reference
 
-::: celligner.__init__
+::: celligner
   selection:
     docstring_style: google
-    docstring_options:
-      replace_admonitions: no 
+  rendering:
+    show_source: true
