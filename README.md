@@ -22,11 +22,11 @@ see `CONTRIBUTING.md`
 
 ## run Celligner
 
-see `Celligner_demo.ipynb` for an example of usage.
+see `docs/Celligner_demo.[html|pdf]` for an example of usage.
   
 ## Multidataset alignment
 
-see `Celligner_demo.ipynb` for an example of usage.
+see `docs/Celligner_demo.[html|pdf]` for an example of usage.
 
 one can use addToFit(), addToPredict() depending on whether they want to align their dataset to another or align another dataset to theirs.
 
@@ -36,6 +36,7 @@ if you have a very small dataset and want to align to CCLE or CGA, use the param
 
 for the original R version of celligner, please check the R/README.md file here: [https://github.com/broadinstitute.org/celligner/tree/master/R/README.md](https://github.com/broadinstitute.org/celligner/tree/master/R/README.md)
 
+---
 
 Please use _github issues_ for any problem related to the tool.
 
