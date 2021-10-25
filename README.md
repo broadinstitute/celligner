@@ -36,6 +36,7 @@ if you have a very small dataset and want to align to CCLE or CGA, use the param
 
 for the original R version of celligner, please check the R/README.md file here: [https://github.com/broadinstitute.org/celligner/tree/master/R/README.md](https://github.com/broadinstitute.org/celligner/tree/master/R/README.md)
 
+---
 
 Please use _github issues_ for any problem related to the tool.
 
