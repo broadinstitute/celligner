@@ -22,11 +22,11 @@ see `CONTRIBUTING.md`
 
 ## run Celligner
 
-see `Celligner_demo.ipynb` for an example of usage.
+see `docs/Celligner_demo.[html|pdf]` for an example of usage.
   
 ## Multidataset alignment
 
-see `Celligner_demo.ipynb` for an example of usage.
+see `docs/Celligner_demo.[html|pdf]` for an example of usage.
 
 one can use addToFit(), addToPredict() depending on whether they want to align their dataset to another or align another dataset to theirs.
 
