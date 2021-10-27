@@ -7,7 +7,11 @@ Celligner is a computational project to align multiple cancer datasets across se
 See our latest paper on aligning CCLE cell lines with TCGA tumors:
 [2020 paper](https://www.nature.com/articles/s41467-020-20294-x)
 
+## Just want a quick look?
 
+Go here for the production version: [https://depmap.org/portal/celligner/](https://depmap.org/portal/celligner/)
+
+Go here for some usage examples: [https://raw.githack.com/broadinstitute/celligner/master/docs/example.html](https://raw.githack.com/broadinstitute/celligner/master/docs/example.html)
 ## Install
 
 > TO see the old R package installation instruction, see the `R/`folder.
@@ -29,6 +33,7 @@ see `CONTRIBUTING.md`
 ## Use Celligner
 
 See `docs/Celligner_demo.[html|pdf]` for an example of usage.
+(view [here](https://raw.githack.com/broadinstitute/celligner/master/docs/example.html))
 
 celligner works like most scikit learn tool.
 
@@ -54,6 +59,7 @@ my_alligner.plot(color_column="tissue_type", colortable=TISSUE_COLOR, umap_kwarg
 Users can access other methods such as save(), load(), addToFit(), etc, as well as many data in values: pca_transform, transform_clusters, differential_genes_names, mnn_pairs, etc.
 
 Please have a look at `docs/Celligner_demo.[html|pdf]` for an example of usage.
+(view [here](https://raw.githack.com/broadinstitute/celligner/master/docs/example.html))
 
 ### Computational complexity
 
@@ -87,10 +93,12 @@ my_alligner.plot()
 This way you will not rerun the entire model.
 
 See `docs/Celligner_demo.[html|pdf]` for other examples of usage.
+(view [here](https://raw.githack.com/broadinstitute/celligner/master/docs/example.html))
 
 ## Multidataset alignment
 
 Dee `docs/Celligner_demo.[html|pdf]` for an example of usage.
+(view [here](https://raw.githack.com/broadinstitute/celligner/master/docs/example.html))
 
 One can use addToFit(), addToPredict() depending on whether they want to align their dataset to another or align another dataset to theirs.
 
