@@ -21,33 +21,6 @@ from contrastive import CPCA
 import mnnpy
 from celligner import limma
 
-def check_Xpression(X_pression, gene_file):
-  """
-
-  Args:
-    X_pression (pd.Dataframe): expression data
-    gene_file (pd.Dataframe): gene file with an ensembl_gene_id column
-
-  Raises:
-    ValueError: if the number of genes in the expression matrix and the gene file do not match
-    ValueError: if the expression matrix contains nan values
-
-  Returns:
-    (pd.Dataframe): the expression matrix
-  """
-  common_genes = set(X_pression.columns) & set(gene_file.ensembl_gene_id)
-  if len(common_genes) < MIN_GENES:
-    raise ValueError("X_pression columns do not match gene_file enough only " +
-                    str(len(common_genes))+" common genes")
-  else:
-    print("found "+str(len(common_genes))+" common genes")
-  # drop genes not in gene_file
-  X_pression = X_pression.loc[:, common_genes].astype(float)
-  # raise issue if there are any NaNs
-  if X_pression.isnull().values.any():
-    raise ValueError("X_pression contains NaNs")
-  return X_pression
-
 
 def runDiffExprOnCluster(expression, clustered, clust_covariates=None,):
   """
@@ -85,15 +58,16 @@ def runDiffExprOnCluster(expression, clustered, clust_covariates=None,):
   print("running limmapy on the samples")
   res = limma.limmapy().lmFit(data, design_matrix).eBayes(trend=False).topTable(
       number=len(data)).iloc[:,len(clusts):]
-  return res.sort_values(by='F')
+  return res.sort_values(by='F', ascending=False)
 
 class Celligner(object):
   def __init__(self, gene_file=None, onlyGenes=GENE_TYPE,
                ensemble_server="http://nov2020.archive.ensembl.org/biomart",
                umap_kwargs=UMAP_PARAMS, pca_kwargs=PCA_PARAMS,
-               snn_kwargs=SNN_PARAMS, topKGenes=TOP_K_GENES, cpca_kwargs=CPCA_PARAMS, 
+               neightbors_kwargs=SC_NEIGH_PARAMS, topKGenes=TOP_K_GENES, cpca_kwargs=CPCA_PARAMS, 
                cpca_ncomp=CPCA_NCOMP, mnn_kwargs=MNN_PARAMS, make_plots=False,
-               low_mem=False, louvain_kwargs=LOUVAIN_PARAMS, method="mnn_marioni"): #scneigh_kwargs=SC_NEIGH_PARAMS
+               low_mem=False, louvain_kwargs=LOUVAIN_PARAMS, method="mnn_marioni",
+               priotize_fit=False,):
     """initialize Celligner object
 
     Args:
@@ -104,7 +78,6 @@ class Celligner(object):
         Defaults to "http://nov2020.archive.ensembl.org/biomart".
       umap_kwargs (dict, optional): see params.py . Defaults to {}.
       pca_kwargs (dict, optional): see see params.py . Defaults to {}.
-      snn_kwargs (dict, optional): see see params.py . Defaults to {}.
       topKGenes (int, optional): see params.py. Defaults to 1000.
       cpca_kwargs (dict, optional): see see params.py . Defaults to {}.
       cpca_ncomp (int, optional): see params.py. Defaults to 10.
@@ -112,6 +85,7 @@ class Celligner(object):
       make_plots (bool, optional): whether to log multiple plots along the way. Defaults to False.
       low_mem (bool, optional): adviced if you have less than 32Gb of RAM. Defaults to False.
       louvain_kwargs (dict, optional): see params.py . Defaults to {}.
+      neightbors_kwargs (dict, optional): see params.py . Defaults to {}.
       method (str, optional): either "mnn_marioni" or "mnn". Defaults to "mnn_marioni".
     """
     if gene_file:
@@ -131,7 +105,6 @@ class Celligner(object):
           keep='first', inplace=True)
     self.umap_kwargs = umap_kwargs
     self.pca_kwargs = pca_kwargs
-    self.snn_kwargs = snn_kwargs
     self.topKGenes = topKGenes
     self.cpca_kwargs = cpca_kwargs
     self.cpca_ncomp = cpca_ncomp
@@ -140,11 +113,11 @@ class Celligner(object):
     self.make_plots = make_plots
     self.low_mem = low_mem
     self.louvain_kwargs = louvain_kwargs
-    #self.scneigh_kwargs = scneigh_kwargs
+    self.neightbors_kwargs = neightbors_kwargs
     self.method = method
+    self.priotize_fit=priotize_fit
 
     self.fit_input=None
-    self.fit_reduced=None
     self.fit_clusters=None
     self.differential_genes_input=None
     self.differential_genes_names=None
@@ -152,7 +125,6 @@ class Celligner(object):
     self.transform_annotations = None
     self.transform_input=None
     self.transform_clusters=None
-    self.transform_reduced=None
     self.corrected=None
     self.pca_fit=None
     self.pca_transform=None
@@ -160,7 +132,44 @@ class Celligner(object):
     self.cpca_loadings=None
 
 
-  def addToFit(self, X_pression, annotations=None, dofit=True, doAdd=True):
+  def _check_Xpression(self, X_pression, gene_file):
+    """
+
+    Args:
+      X_pression (pd.Dataframe): expression data
+      gene_file (pd.Dataframe): gene file with an ensembl_gene_id column
+
+    Raises:
+      ValueError: if the number of genes in the expression matrix and the gene file do not match
+      ValueError: if the expression matrix contains nan values
+
+    Returns:
+      (pd.Dataframe): the expression matrix
+    """
+    common_genes = set(X_pression.columns) & set(gene_file.ensembl_gene_id)
+    if len(common_genes) < MIN_GENES:
+      raise ValueError("X_pression columns do not match gene_file enough only " +
+                      str(len(common_genes))+" common genes")
+    if self.fit_input is not None:
+      common_genes = set(self.common_genes) & set(common_genes)
+      if len(common_genes) < MIN_GENES:
+        raise ValueError("X_pression columns do not match gene_file enough only " +
+                      str(len(common_genes))+" common genes")
+      if self.cpca_loadings is not None:
+        self.cpca_loadings = self.cpca_loadings[:,self.fit_input.columns.isin(common_genes)]
+      if self.transform_input is not None:
+        self.transform_input = self.transform_input.loc[:,common_genes]
+      self.fit_input = self.fit_input.loc[:,common_genes]
+    print("found "+str(len(common_genes))+" common genes")
+    # drop genes not in gene_file
+    X_pression = X_pression.loc[:, common_genes].astype(float)
+    # raise issue if there are any NaNs
+    if X_pression.isnull().values.any():
+      raise ValueError("X_pression contains NaNs")
+    return X_pression
+
+
+  def addToFit(self, X_pression, annotations=None, do_fit=True, do_add=True, ):
     """adds expression data to the fit dataframe
 
     Args:
@@ -173,7 +182,7 @@ class Celligner(object):
     """
     count = X_pression.shape[0]+(self.fit_input.shape[0] if self.fit_input is not None else 0)
     print('looking at '+str(count)+' samples.')
-    fit_input = check_Xpression(X_pression, self.gene_file)
+    fit_input = self._check_Xpression(X_pression, self.gene_file)
     if annotations is not None:
       if len(annotations) != len(fit_input) or list(fit_input.index) != list(annotations.index):
         raise ValueError("annotations do not match X_pression")
@@ -184,7 +193,7 @@ class Celligner(object):
                                           'disease_type', 'tissue_type'],
                                  data=np.zeros((len(X_pression), 3))+self.number_of_datasets)
       
-    if self.common_genes is None or not doAdd:
+    if self.fit_input is None or not do_add:
       # it is the first time we run it.
       print("creating a fit dataset..")
       self.common_genes = fit_input.columns
@@ -192,17 +201,14 @@ class Celligner(object):
       self.fit_annotations = annotations
     else:
       print("adding to fit dataset..")
-      # check if same genes
-      if set(fit_input.columns) != set(self.common_genes):
-        raise ValueError("fit_input's genes do not match common_genes")
       # add annotations together
       self.fit_annotations = self.fit_annotations.append(annotations)
       # add fit_input together
       self.fit_input = self.fit_input.append(fit_input)
     self.number_of_datasets +=1
-    if dofit:
+    if do_fit:
       return self.fit()
-    elif doAdd: 
+    elif do_add: 
       return self.fit(_rerun=False)
 
 
@@ -223,34 +229,36 @@ class Celligner(object):
     """
     # check if X_pression is compatible with the model
     if X_pression is not None:
-      self.addToFit(X_pression, annotations, dofit=False, doAdd=False)
+      self.addToFit(X_pression, annotations, do_fit=False, do_add=False)
     elif self.fit_input is None:
       raise ValueError("no input provided")
   
     # mean center the dataframe
-    self.fit_input = self.fit_input.sub(self.fit_input.mean(axis=1), axis=0)
-    # dimensionality reduction
-    print('reducing dimensionality...')
-    if _rerun:
-      self.pca_fit = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-      self.fit_reduced = self.pca_fit.fit_transform(self.fit_input)
-    else:
-      self.fit_reduced = self.pca_fit.transform(self.fit_input)
+    # TODO? a bit different from R's version as it was using an approximate fast centering method
+    self.fit_input = self.fit_input.sub(self.fit_input.mean(0), 1)
     # clustering: doing SNN on the reduced data
     print('clustering...')
     #anndata from df
+    # TODO? a bit different from R's version. ScanPy and Seurat differ in their implementation.
     adata = AnnData(self.fit_input)
-    neighbors(adata) # **scneigh_kwargs
+    neighbors(adata, **self.neightbors_kwargs)
     louvain(adata, **self.louvain_kwargs)
     self.fit_clusters = adata.obs['louvain'].values.astype(int)
     del adata
-    #self.fit_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.fit_reduced,
-    #    sample_weight=None)
+
     # do differential expression between clusters and getting the top K most expressed genes
-    if self.make_plots:
-      # plotting
+    if self.make_plots:      
+      # dimensionality reduction
+      print('reducing dimensionality...')
+      if _rerun:
+        self.pca_fit = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+        fit_reduced = self.pca_fit.fit_transform(self.fit_input)
+      else:
+        fit_reduced = self.pca_fit.transform(self.fit_input)
+      
+      # plotting    
       plot.scatter(umap.UMAP(
-        **self.umap_kwargs).fit_transform(self.fit_reduced), 
+        **self.umap_kwargs).fit_transform(fit_reduced), 
         xname="UMAP1", yname="UMAP2", colors=self.fit_clusters,
         labels=["C"+str(i) for i in self.fit_clusters],
         title="SNN clusters", radi=.1)
@@ -268,22 +276,46 @@ class Celligner(object):
     print('done')
     return self
 
-  def putAllToFit(self):
+
+  def putAllToFit(self, redo_diff=False):
     """puts all the data to the fit dataframe"""
     self.fit_annotations = self.fit_annotations.append(self.transform_annotations)
-    self.fit_input = self.fit_input.append(self.transform_input)
-    return self.fit()
+    self.fit_input = self.fit_input.append(self.corrected)
+    
+    # clustering
+    print('clustering...')
+    adata = AnnData(self.fit_input)
+    neighbors(adata, **self.neightbors_kwargs)
+    louvain(adata, **self.louvain_kwargs)
+    self.fit_clusters = adata.obs['louvain'].values.astype(int)
+    del adata
+    
+    if redo_diff:
+      print('doing differential expression analysis on the clusters')
+      self.differential_genes_input = runDiffExprOnCluster(
+        self.fit_input, self.fit_clusters)
+      # need enough genes to be significant
+      if len(self.differential_genes_input[self.differential_genes_input.F>10]) < self.topKGenes:
+        raise ValueError("not enough differentially expressed genes found..")
+
+    # cleaning up transform
+    self.transform_annotations = None
+    self.corrected = None
+    self.transform_input = None
+    self.pca_transform = None
+
+    print('done')
 
 
-  def addTotransform(self, X_pression, annotations=None, dotransform=True, doAdd=True):
+  def addToTransform(self, X_pression, annotations=None, do_transform=True, do_add=True, **kwargs):
     """adds expression data to the transform dataframe
 
     Args:
       X_pression (pd.Dataframe): the expression data as RSEM expected counts
         with ensembl_gene_id as columns and samplenames as index.
       annotations (pd.Dataframe, optional): sample annotations, for each sample,
-      dotransform (bool, optional): if True, will transform the data. Defaults to True.
-      doAdd (bool, optional): if True, will add the data to the transform dataframe.
+      do_transform (bool, optional): if True, will transform the data. Defaults to True.
+      do_add (bool, optional): if True, will add the data to the transform dataframe.
 
     Returns:
       (, optional): transform()'s output
@@ -294,11 +326,11 @@ class Celligner(object):
       ValueError: if the model has not been fitted yet
     """
     count = X_pression.shape[0]+(self.transform_input.shape[0]
-                                 if self.transform_input is not None and doAdd else 0)
+                                 if self.transform_input is not None and do_add else 0)
     print('looking at '+str(count)+' samples.')
     if self.fit_input is None:
       raise ValueError("no fit data available, need to run fit or addToFit first")
-    transform_input = check_Xpression(X_pression, self.gene_file)
+    transform_input = self._check_Xpression(X_pression, self.gene_file)
     if annotations is not None:
       if len(annotations) != len(transform_input) or list(transform_input.index) != list(annotations.index):
         raise ValueError("annotations do not match X_pression")
@@ -308,30 +340,27 @@ class Celligner(object):
                                  columns=['cell_type',
                                           'disease_type', 'tissue_type'],
                                  data=np.zeros((len(X_pression), 3))+self.number_of_datasets)
-    if self.transform_input is None or not doAdd:
+    if self.transform_input is None or not do_add:
       # this is the first time we run it.
       print('creating a transform input..')
       self.common_genes = transform_input.columns
-      self.fit_input = self.fit_input[self.common_genes]
       self.transform_input = transform_input
       self.transform_annotations = annotations
     else:
-      # check if same genes
       print('adding to transform..')
-      if set(transform_input.columns) != set(self.common_genes):
-        raise ValueError("transform_input's genes do not match common_genes")
       # add annotations together
       self.transform_annotations = self.transform_annotations.append(annotations)
       # add transform_input together
       self.transform_input = self.transform_input.append(transform_input)
     self.number_of_datasets +=1
-    if dotransform:
-      return self.transform(only_transform=True)
-    elif doAdd:
-      return self.transform(_rerun=False)
+    if do_transform:
+      return self.transform(only_transform=True, **kwargs)
+    elif do_add:
+      return self.transform(**kwargs)
 
 
-  def transform(self, X_pression=None, annotations=None, only_transform=False, _rerun=True):
+  def transform(self, X_pression=None, annotations=None, only_transform=False, _rerun=True,
+    recompute_contamination=True):
     """transform the cell type for each sample in X_pression
 
     Args:
@@ -346,39 +375,42 @@ class Celligner(object):
       ValueError: if the new expression matrix has different gene names than the current one
     """
     if X_pression is not None:
-      self.addTotransform(X_pression, annotations, dotransform=False, doAdd=False)
+      self.addToTransform(X_pression, annotations, do_transform=False, do_add=False)
     elif self.transform_input is None:
       raise ValueError("no transform Expression data provided")
     # mean center the dataframe
-    self.transform_input = self.transform_input.sub(self.transform_input.mean(axis=1), axis=0)
-    
-    # dimensionality reduction
-    print('reducing dimensionality...')
-    if _rerun:
-      self.pca_transform = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-      self.transform_reduced = self.pca_transform.fit_transform(self.transform_input)
-    else:
-      self.transform_reduced = self.pca_transform.transform(self.transform_input)
-    
+    self.transform_input = self.transform_input.sub(self.transform_input.mean(0), 1)
+
     if _rerun:
       # clustering: doing SNN on the reduced data
       print('clustering..')
       #anndata from df
-      adata = AnnData(self.transform_reduced)
-      neighbors(adata) # **scneigh_kwargs
+      adata = AnnData(self.transform_input)
+      neighbors(adata, **self.neightbors_kwargs)
       louvain(adata, **self.louvain_kwargs)
       self.transform_clusters = adata.obs['louvain'].values.astype(int)
       del adata
-      #self.transform_clusters = snn.SNN(**self.snn_kwargs).fit_predict(self.transform_reduced,
-      #                                          sample_weight=None)
 
     if self.make_plots:
+      # dimensionality reduction
+      print('reducing dimensionality...')
+      if _rerun:
+        self.pca_transform = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
+        reduced = self.pca_transform.fit_transform(pd.concat([self.transform_input, self.fit_input]))
+      else:
+        reduced = self.pca_transform.transform(pd.concat([self.transform_input, self.fit_input]))
+      
       # plotting
+      imp = np.zeros(len(self.fit_clusters)+len(self.transform_clusters))
+      if self.priotize_fit:
+        imp[len(self.fit_clusters):] = 2
+      else:
+        imp[:len(self.fit_clusters)] = 2
       plot.scatter(umap.UMAP(
-        **self.umap_kwargs).fit_transform(np.vstack([self.fit_reduced, self.transform_reduced])), 
+        **self.umap_kwargs).fit_transform(reduced), 
         xname="UMAP1", yname="UMAP2", colors=list(self.fit_clusters)+list(self.transform_clusters+len(set(self.fit_clusters))),
         labels=["fit_C"+str(i) for i in self.fit_clusters]+["transform_C"+str(i) for i in self.transform_clusters],
-        title="SNN clusters", radi=.1, importance=[0]*len(self.fit_reduced) + [1]*len(self.transform_reduced))
+        title="SNN clusters", radi=.1, importance=imp)
     
     # do differential expression between clusters and getting the top K most expressed genes
     print('doing differential expression analysis on the clusters..')
@@ -405,32 +437,33 @@ class Celligner(object):
         else:
           self.differential_genes_names.append(differential_genes.index[i//2])
       
-      # removing cluster averages to samples clusters
-      # TODO: take care of outlier cluster when outlier is authorized
-      centered_fit_input = pd.concat([self.fit_input.loc[self.fit_clusters==val]\
-        - self.fit_input.loc[self.fit_clusters==val].mean(axis=0) for val in set(self.fit_clusters)])
-      centered_transform_input = pd.concat([self.transform_input.loc[self.transform_clusters == val]\
-        - self.transform_input.loc[self.transform_clusters==val].mean(axis=0) for val in set(self.transform_clusters)])
-      import ipdb; ipdb.set_trace()
-      # doing cPCA on the dataset
-      print('doing cPCA..')
-      # TODO: try the automated version, (select the best alpha above 1?)
-      self.cpca_loadings = CPCA(standardize=False, n_components=self.cpca_ncomp, low_memory=self.low_mem).fit(
-        background=centered_transform_input, foreground=centered_fit_input, preprocess_with_pca_dim=centered_fit_input.shape[1]
-        ).transform(only_loadings=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs).T
-      del centered_transform_input, centered_fit_input
+      if recompute_contamination:
+        # removing cluster averages to samples clusters
+        # TODO: take care of outlier cluster when outlier is authorized
+        centered_fit_input = pd.concat([self.fit_input.loc[self.fit_clusters==val]\
+          - self.fit_input.loc[self.fit_clusters==val].mean(axis=0) for val in set(self.fit_clusters)])
+        centered_transform_input = pd.concat([self.transform_input.loc[self.transform_clusters == val]\
+          - self.transform_input.loc[self.transform_clusters==val].mean(axis=0) for val in set(self.transform_clusters)])
+        
+        # doing cPCA on the dataset
+        print('doing cPCA..')
+        # TODO? a bit different from R's version as it was using an approximate solver for the eigen problem
+        # TODO: try the automated version, (select the best alpha above 1?)
+        self.cpca_loadings = CPCA(standardize=False, n_components=self.cpca_ncomp, low_memory=self.low_mem).fit(
+          background=centered_transform_input, foreground=centered_fit_input, preprocess_with_pca_dim=centered_fit_input.shape[1]
+          ).transform(only_loadings=True, return_alphas=False, alpha_selection = 'manual', **self.cpca_kwargs)
+        del centered_transform_input, centered_fit_input
     
     # regress out the cPCA components from the data
     print('regressing out the cPCA components..')
     # take the residuals of the linear regression of fit_input with the cpca_loadings
     transformed_fit = self.fit_input - LinearRegression(fit_intercept=False).fit(
-      self.cpca_loadings, self.fit_input.T).predict(self.cpca_loadings).T
+      self.cpca_loadings.T, self.fit_input.T).predict(self.cpca_loadings.T).T
     transformed_transform = self.transform_input - LinearRegression(fit_intercept=False).fit(
-      self.cpca_loadings, self.transform_input.T).predict(self.cpca_loadings).T
+      self.cpca_loadings.T, self.transform_input.T).predict(self.cpca_loadings.T).T
     
-    # TODO?: how come we take the top K genes from a transformed matrix where we removed key axes of variances?
-    # TODO?: in Allie's version, it was using different Ks for the two datasets. this tool only uses one
     varsubset = np.array([1 if i in self.differential_genes_names else 0 for i in self.transform_input.columns]).astype(bool)
+    #varsubset = 
     if self.method == 'mnn_marioni':
       print('doing the MNN analysis using Marioni et al. method..')
       self.corrected, self.mnn_pairs = mnnpy.marioniCorrect(transformed_fit,
@@ -498,7 +531,6 @@ class Celligner(object):
       if self.fit_input is not None:
         self.fit_input.to_csv(os.path.join(folder, 'data', 'fit_input.csv'), index=None)
         self.fit_annotations.to_csv(os.path.join(folder, 'data', 'fit_annotations.csv'), index=None)
-        self.fit_reduced.to_csv(os.path.join(folder, 'data', 'fit_reduced.csv'), index=None)
         h.listToFile(self.fit_clusters, os.path.join(folder, 'data', 'fit_clusters.csv'), index=None)
         self.differential_genes_input.to_csv(os.path.join(
           folder, 'data', 'differential_genes_input.csv'))
@@ -510,7 +542,6 @@ class Celligner(object):
         h.listToFile(self.transform_clusters, os.path.join(folder, 'data', 'transform_clusters.csv'))
         h.listToFile(self.differential_genes_names, os.path.join(folder, 'data', 'differential_genes_names.csv'))
         self.corrected.to_csv(os.path.join(folder, 'data', 'corrected.csv'), index=None)
-        self.transform_reduced.to_csv(os.path.join(folder, 'data', 'transform_reduced.csv'), index=None)
         self.mnn_pairs.to_csv(os.path.join(folder, 'data', 'mnn_pairs.csv'), index=None)
         self.pca_transform.to_csv(os.path.join(folder, 'data', 'pca_transform.csv'), index=None)
         self.cpca_loadings.to_csv(os.path.join(folder, 'data', 'cpca_loadings.csv'), index=None)
@@ -527,7 +558,6 @@ class Celligner(object):
       # load the data
       if os.path.exists(os.path.join(folder, 'data', 'fit_input.csv')):
         self.fit_input = pd.read_csv(os.path.join(folder, 'data', 'fit_input.csv'))
-        self.fit_reduced = pd.read_csv(os.path.join(folder, 'data', 'fit_reduced.csv'))
         self.fit_annotations = pd.read_csv(os.path.join(folder, 'data', 'fit_annotations.csv'))
         self.fit_clusters = h.fileToList(os.path.join(folder, 'data', 'fit_clusters.csv'))
         self.differential_genes_input = pd.read_csv(os.path.join(folder, 'data', 'differential_genes_input.csv'))
@@ -535,7 +565,6 @@ class Celligner(object):
         self.pca_fit = pd.read_csv(os.path.join(folder, 'data', 'pca_transform.csv'))
       if os.path.exists(os.path.join(folder, 'data', 'transform_input.csv')):
         self.transform_input = pd.read_csv(os.path.join(folder, 'data', 'transform_input.csv'))
-        self.transform_reduced = pd.read_csv(os.path.join(folder, 'data', 'transform_reduced.csv'))
         self.transform_annotations = pd.read_csv(os.path.join(folder, 'data', 'transform_annotations.csv'))
         self.transform_clusters = h.fileToList(os.path.join(folder, 'data', 'transform_clusters.csv'))
         self.differential_genes_names = h.fileToList(os.path.join(folder, 'data', 'differential_genes_names.csv'))
@@ -549,9 +578,10 @@ class Celligner(object):
         model=pickle.load(f)
       self.__dict__.update(model.__dict__)
 
+
   def plot(self, onlyfit=False, onlytransform=False, corrected=True, umap_kwargs={},
            color_column="cell_type", show_clusts=False,annotations = None,
-           smaller="predict", rerun=True, colortable=None, **plot_kwargs):
+           rerun=True, colortable=None, **plot_kwargs):
     """plot the model
 
     Args:
@@ -611,7 +641,7 @@ class Celligner(object):
       self.umap_kwargs.update(umap_kwargs)
       print('reducing dimensionality...')
       pca = PCA(**self.pca_kwargs) if not self.low_mem else IncrementalPCA(**self.pca_kwargs)
-      #data = pca.fit_transform(data)
+      data = pca.fit_transform(data)
       umap_reduced=umap.UMAP(
           **self.umap_kwargs).fit_transform(data)
       if annotations is None:
@@ -639,10 +669,10 @@ class Celligner(object):
     if "importance" not in plot_kwargs:
       # 1 for all fit and 0 for all predict
       imp = np.zeros(len(self.umap_reduced))
-      if smaller == "fit":
-        imp[:len(self.fit_input)]=1
+      if self.priotize_fit:
+        imp[len(self.fit_input):]=2
       else:
-        imp[len(self.fit_input):]=1
+        imp[:len(self.fit_input)]=2
       plot_kwargs.update({'importance':imp})
     if 'xname' not in plot_kwargs:
       plot_kwargs.update({'xname':'UMAP1'})
@@ -656,3 +686,44 @@ class Celligner(object):
     p = plot.scatter(self.umap_reduced, **plot_kwargs)
     plot_kwargs = {}
     return p
+
+  def getKNN(self, ofcell, incell, k=5, n_jobs=-1):
+    """get the KNN of a cell
+
+    Args:
+      ofcell (str): cell to get the KNN of
+      incell (str): cell to get the KNN of
+
+    Returns:
+      list: list of KNN of incell
+    """
+    if self.fit_input is None:
+      raise ValueError('model not fitted yet')
+    if self.corrected is None:
+      val = self.fit_input
+      ann = self.fit_annotations
+    else:
+      val = pd.concat([self.fit_input, self.corrected])
+      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    distances, index = cKDTree(val[ann['cell_type']==incell]).query(
+      x=val[ann['cell_type']==ofcell],
+      k=5,
+      n_jobs=n_jobs)
+    return distances, index
+
+  def QCresults(self, ofcell, incell, k=5, n_jobs=-1):
+    """
+
+    Args:
+      ofcell (str): cell to get the KNN of
+      incell (str): cell to get the KNN of
+
+    Returns:
+      list: list of KNN of incell
+    """
+    distances, index = self.getKNN(ofcell, incell, k, n_jobs)
+    if self.corrected is None:
+      ann = self.fit_annotations
+    else:
+      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    #for val in 
