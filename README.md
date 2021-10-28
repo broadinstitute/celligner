@@ -13,7 +13,7 @@ __Celligner__ is initially an R project that you can find in the `R/` folder.
 
 A Python version was made that is the exact same version as the R verion. However one should not expect the same plot for a couple reasons:
 
-### UMAP
+#### UMAP
 
 The plot some users have been used to is a unique run of UMAP on the __Celligner__ realignment data. This is done by fixing the seed of the UMAP algorithm. You can still do that for the python version but it is disabled by default and not recommended. We recommend users to play with the UMAP parameter and make multiple plots. 
 This helps to prevent reading too much into UMAP's output. Things that don't stay the same are not necessarily true attributes of the data.
@@ -22,7 +22,7 @@ Learn more here: [distill](https://distill.pub/2016/misread-tsne/), [Lior's twit
 
 Additionally we also advice users to complement assumptions by applying methods like differential expression analysis across clusters to find any meaningful information.
 
-### Algorithmic differences
+#### Algorithmic differences
 
 __Celligner__ is composed of 4 key steps:
 
@@ -31,7 +31,7 @@ __Celligner__ is composed of 4 key steps:
 3. A cPCA to remove tumor impurity signal. This method is exactly the same except that the python version does exact PCA computation while the R version does an approximate version.
 4. An MNN allignment: this version is 100% similar to the R version of __Celligner__ in its output.
 
-### Is there any other differences?
+#### Is there any other differences?
 
 Overall improvements, yes:
 
