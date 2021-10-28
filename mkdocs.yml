@@ -1,11 +1,15 @@
 site_name: celligner
 theme: readthedocs
+nav:
+  - "Celligner": celligner.md
 plugins:
-  - mkdocstrings:
-      handlers:
-        python:
-          setup_commands:
-            - import sys
-            - from unittest.mock import MagicMock as mock
-            - sys.modules["mnnpy"] = mock()
-            - sys.modules["limmapy"] = mock()
+- mkdocstrings:
+    default_handler: python
+    handlers:
+      python:
+        rendering:
+          show_source: false
+    custom_templates: templates
+    watch:
+      - celligner/
+          

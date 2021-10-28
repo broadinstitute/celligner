@@ -14,7 +14,7 @@ see our latest paper on aligning CCLE cell lines with TCGA tumors:
 
 ``` r
 library(devtools)
-devtools::install_github("broadinstitute/celligner")
+devtools::install_github("broadinstitute/celligner/R")
 ```
 
 if you could not install taigr:

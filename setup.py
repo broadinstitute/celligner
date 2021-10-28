@@ -55,6 +55,7 @@ setup(
   version=read("celligner", "VERSION"),
   description='A useful module for alligning cell lines to tumors',
   long_description=read("README.md"),
+  long_description_content_type="text/markdown",
   author='Jeremie Kalfon',
   author_email='jkobject@gmail.com',
   url="https://github.com/BroadInstitute/celligner",

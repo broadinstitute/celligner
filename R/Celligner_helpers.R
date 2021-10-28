@@ -315,4 +315,3 @@ modified_mnnCorrect <- function(ref_mat, targ_mat, k1 = 20, k2 = 20,
     output
   }
 }
-
