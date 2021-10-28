@@ -18,6 +18,8 @@ A python version was made that is the exact same version as the R verion. Howeve
 The plot some users have been used to is a unique run of UMAP on the celligner realignment data. This is done by fixing the seed of the UMAP algorithm. You can still do that for the python version but it is disabled by default and not recommended. We recommend users to play with the UMAP parameter and make multiple plots. 
 This helps to prevent reading too much into UMAP's output. Things that don't stay the same are not necessarily true attributes of the data.
 
+Learn more here: [distill](https://distill.pub/2016/misread-tsne/), [Lior's twittorial](https://twitter.com/lpachter/status/1431325969411821572).
+
 Additionally we also advice users to completement assumptions by applying methods like differential expression analysis across clusters to find any meaningful information.
 
 ### Is there any algorithmic difference?
