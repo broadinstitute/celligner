@@ -1,25 +1,34 @@
 # Celligner
+from re import sub
 from celligner.params import *
+from celligner import limma
+
 from genepy.utils import helper as h
 from genepy.utils import plot
+
 from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.linear_model import LinearRegression
+from scipy.spatial import cKDTree
+import umap.umap_ as umap
+
 from scanpy.tl import louvain
 from scanpy.pp import neighbors
 from anndata import AnnData
 # import louvain
 # import pynndescent
+from sklearn.cluster import KMeans
+from sklearn import metrics
 
+
+from collections import Counter
 import os
-import sys
+import pickle
 
 import pandas as pd
 import numpy as np
-import umap.umap_ as umap
-import pickle
+
 from contrastive import CPCA
 import mnnpy
-from celligner import limma
 
 
 def runDiffExprOnCluster(expression, clustered, clust_covariates=None,):
@@ -687,6 +696,7 @@ class Celligner(object):
     plot_kwargs = {}
     return p
 
+
   def getKNN(self, ofcell, incell, k=5, n_jobs=-1):
     """get the KNN of a cell
 
@@ -705,14 +715,71 @@ class Celligner(object):
     else:
       val = pd.concat([self.fit_input, self.corrected])
       ann = pd.concat([self.fit_annotations, self.transform_annotations])
-    distances, index = cKDTree(val[ann['cell_type']==incell]).query(
-      x=val[ann['cell_type']==ofcell],
-      k=5,
-      n_jobs=n_jobs)
-    return distances, index
+    distances, index = cKDTree(val[ann['cell_type']==incell].values).query(
+      x=val[ann['cell_type']==ofcell].values, k=k, n_jobs=n_jobs)
+    temp = {}
+    incell = ann[ann['cell_type']==incell] 
+    ofcell = ann[ann['cell_type']==ofcell]
+    temp = {ofcell.index[i]: [incell.index[x] for x in val]+distances[i].tolist() for i, val in enumerate(index)}
+    return pd.DataFrame(temp, index=[str(i) for i in range(k)]+['dist'+str(i) for i in range(k)]).T
+
+
+  def makeSimiScore(self, ofcell, on="tissue_type"):
+    """make a similarity score between two cells
+
+    Args:
+      ofcell (str): celltype to compare
+      on (str): column to use for the similarity score
+
+    Returns:
+      pd.DataFrame: similarity score
+    """
+    if self.fit_input is None:
+      raise ValueError('model not fitted yet')
+    for i, val in Counter(ann[on]): 
+      if val < 3:
+        print("group {} has less than 3 datapoint and should be merged or removed\
+          to get better results".format(i))
+    if self.corrected is None:
+      val = self.fit_input
+      ann = self.fit_annotations
+    else:
+      val = pd.concat([self.fit_input, self.corrected])
+      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    # compute silhouette coefficient on ofcell
+    val = val[ann['cell_type']==ofcell]
+    ann = ann[ann['cell_type']==ofcell]
+
+    # first we want to know the quality of the pseudo ground truth we are using.
+    res = metrics.silhouette_score(val, ann[on], metric='euclidean')
+    print('we have an original overall silhouette score of {} for this cell type \
+      and annotation'.format(res))
+    
+    # compute similarity within clusters and between clusters
+    clusts = set(ann[on])
+    simi_score = np.zeros((len(clusts), len(clusts)))
+    import pdb; pdb.set_trace()
+    for n1, clust1 in enumerate(clusts):
+      for n2, clust2 in enumerate(clusts):
+        if n2 < n1:
+          continue
+        if clust1 != clust2:
+          # we do kMeans and NMI score
+          subann = ann[on].isin([clust1, clust2])
+          labels = KMeans(n_clusters=2, random_state=0).fit_predict(val[subann].values)
+          subann = ann[subann]
+          res = metrics.normalized_mutual_info_score(
+            labels, subann[on]==clust2)
+          simi_score[n1, n2] = res
+          simi_score[n2, n1] = res
+        else:
+          # we compute the silhouette score if itself against the rest
+          simi_score[n1,n1] = metrics.silhouette_samples(val, ann[on]==clust1, metric='euclidean')[ann[on]==clust1].mean()
+    return pd.DataFrame(simi_score, index=list(clusts), columns=list(clusts))
+
 
   def QCresults(self, ofcell, incell, k=5, n_jobs=-1):
-    """
+    """Gives an alignment quality value 
 
     Args:
       ofcell (str): cell to get the KNN of
@@ -721,9 +788,14 @@ class Celligner(object):
     Returns:
       list: list of KNN of incell
     """
-    distances, index = self.getKNN(ofcell, incell, k, n_jobs)
+    if self.fit_input is None:
+      raise ValueError('model not fitted yet')
     if self.corrected is None:
-      ann = self.fit_annotations
-    else:
-      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+      raise ValueError('model not corrected yet')
+    
+    res = self.getKNN(ofcell, incell, k, n_jobs)
+    ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    
+    self.makeSimiScore(ofcell)
+    self.makeSimiScore(incell)
     #for val in 

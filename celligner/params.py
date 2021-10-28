@@ -1,5 +1,5 @@
 TISSUE_COLOR = {
-'engineered': "#bcdfbd",
+ 'engineered': "#bcdfbd",
  'fibroblast': "#9eAeAe",
  'other': "#A3969d",
  'skin': "#969696",
@@ -54,6 +54,7 @@ TISSUE_COLOR = {
  'prostate': "#637939",
  'engineered_prostate': "#6e7e3e",
  'testis': "#8c6d31",
+
  'thyroid': "#8f7e3e",
  'endocrine': "#bd9e39",
  'pineal': "#e7ba52",
@@ -426,11 +427,12 @@ MNN_PARAMS = {
 #  "svd_mode": "rsvd",
 #  "svd_dim": None,
 #}
-
+# @see https://scanpy.readthedocs.io/en/latest/generated/scanpy.tl.louvain.html
 LOUVAIN_PARAMS = {
   'resolution': 5,
 }
 
+# @see https://scanpy.readthedocs.io/en/stable/generated/scanpy.pp.neighbors.html
 SC_NEIGH_PARAMS = {
   "n_neighbors": 20,
   'n_pcs': 70,
