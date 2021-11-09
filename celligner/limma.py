@@ -60,4 +60,8 @@ class limmapy:
 
   def topTable(self, **kwargs):
     val = limma.topTable(self.fit, **kwargs)
+    if type(val) == robjects.vectors.DataFrame:
+      with robjects.conversion.localconverter(
+          robjects.default_converter + pandas2ri.converter):
+        val = ro.conversion.rpy2py(val)
     return val
