@@ -16,9 +16,8 @@ from scanpy.pp import neighbors
 from anndata import AnnData
 # import louvain
 # import pynndescent
-from sklearn.cluster import KMeans
 from sklearn import metrics
-
+from sklearn.neighbors import KNeighborsClassifier
 
 from collections import Counter
 import os
@@ -256,7 +255,7 @@ class Celligner(object):
     del adata
 
     # do differential expression between clusters and getting the top K most expressed genes
-    if self.make_plots:      
+    if self.make_plots:
       # dimensionality reduction
       print('reducing dimensionality...')
       if _rerun:
@@ -696,6 +695,30 @@ class Celligner(object):
     plot_kwargs = {}
     return p
 
+  
+  def returnAgg(self, ofcell=None, uncorrected=False):
+    """returnAgg returns the aggregated data
+
+    Args:
+      ofcell (str, optional): if not None, return only the data of this cell. Defaults to None.
+
+    Raises:
+        ValueError: [description]
+    """
+    if self.fit_input is None:
+      raise ValueError('model not fitted yet')
+    if self.corrected is None:
+      val = self.fit_input
+      ann = self.fit_annotations
+    else:
+      val = pd.concat([self.fit_input, self.corrected if not uncorrected else self.transform_input])
+      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    # compute silhouette coefficient on ofcell
+    if ofcell is not None:
+      val = val[ann['cell_type']==ofcell]
+      ann = ann[ann['cell_type']==ofcell]
+    return val, ann
+
 
   def getKNN(self, ofcell, incell, k=5, n_jobs=-1):
     """get the KNN of a cell
@@ -707,14 +730,7 @@ class Celligner(object):
     Returns:
       list: list of KNN of incell
     """
-    if self.fit_input is None:
-      raise ValueError('model not fitted yet')
-    if self.corrected is None:
-      val = self.fit_input
-      ann = self.fit_annotations
-    else:
-      val = pd.concat([self.fit_input, self.corrected])
-      ann = pd.concat([self.fit_annotations, self.transform_annotations])
+    val, ann = self.returnAgg()
     distances, index = cKDTree(val[ann['cell_type']==incell].values).query(
       x=val[ann['cell_type']==ofcell].values, k=k, n_jobs=n_jobs)
     temp = {}
@@ -734,31 +750,19 @@ class Celligner(object):
     Returns:
       pd.DataFrame: similarity score
     """
-    if self.fit_input is None:
-      raise ValueError('model not fitted yet')
-    for i, val in Counter(ann[on]): 
-      if val < 3:
-        print("group {} has less than 3 datapoint and should be merged or removed\
-          to get better results".format(i))
-    if self.corrected is None:
-      val = self.fit_input
-      ann = self.fit_annotations
-    else:
-      val = pd.concat([self.fit_input, self.corrected])
-      ann = pd.concat([self.fit_annotations, self.transform_annotations])
-    # compute silhouette coefficient on ofcell
-    val = val[ann['cell_type']==ofcell]
-    ann = ann[ann['cell_type']==ofcell]
+    val, ann = self.returnAgg(ofcell)
+
+    for i, a in Counter(ann[on]).items(): 
+      if a < 3:
+        print("group {} has less than 3 datapoint and should be merged or removed to get better results".format(i))
 
     # first we want to know the quality of the pseudo ground truth we are using.
     res = metrics.silhouette_score(val, ann[on], metric='euclidean')
-    print('we have an original overall silhouette score of {} for this cell type \
-      and annotation'.format(res))
+    print('\nWe have an original overall silhouette score of {} for this cell type and annotation'.format(res))
     
     # compute similarity within clusters and between clusters
     clusts = set(ann[on])
     simi_score = np.zeros((len(clusts), len(clusts)))
-    import pdb; pdb.set_trace()
     for n1, clust1 in enumerate(clusts):
       for n2, clust2 in enumerate(clusts):
         if n2 < n1:
@@ -766,15 +770,17 @@ class Celligner(object):
         if clust1 != clust2:
           # we do kMeans and NMI score
           subann = ann[on].isin([clust1, clust2])
-          labels = KMeans(n_clusters=2, random_state=0).fit_predict(val[subann].values)
+          labels = KNeighborsClassifier(n_neighbors=2, algorithm="ball_tree")\
+            .fit(val[subann].values, ann[subann][on]==clust2)\
+            .predict(val[subann].values)
           subann = ann[subann]
-          res = metrics.normalized_mutual_info_score(
+          res = 1-metrics.normalized_mutual_info_score(
             labels, subann[on]==clust2)
           simi_score[n1, n2] = res
           simi_score[n2, n1] = res
         else:
           # we compute the silhouette score if itself against the rest
-          simi_score[n1,n1] = metrics.silhouette_samples(val, ann[on]==clust1, metric='euclidean')[ann[on]==clust1].mean()
+          simi_score[n1,n1] = metrics.silhouette_samples(val, ann[on]==clust1, metric='minkowski')[ann[on]==clust1].mean()
     return pd.DataFrame(simi_score, index=list(clusts), columns=list(clusts))
 
 
