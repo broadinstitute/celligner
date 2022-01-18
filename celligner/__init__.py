@@ -362,8 +362,6 @@ class Celligner(object):
         self.transform_annotations = None
         self.corrected = None
         self.transform_input = None
-        self.pca_transform = None
-
         print("done")
 
     def addToTransform(
@@ -476,6 +474,10 @@ class Celligner(object):
                 )
                 reduced = self.pca_transform.fit_transform(
                     pd.concat([self.transform_input, self.fit_input])
+                )
+            elif self.pca_transform is None:
+                raise ValueError(
+                    "no PCA transform available, need to _rerun=True or do make_plots=False"
                 )
             else:
                 reduced = self.pca_transform.transform(
@@ -886,16 +888,21 @@ class Celligner(object):
                 annotations = ann
             self.umap_reduced = umap_reduced
             self.annotations = annotations
-            self.clusts = clusts
+            if len(self.clusts) != len(self.annotations):
+                print("some clustering hasn't been done or redone, not using clusters")
+                self.clusts = None
+            else:
+                self.clusts = clusts
         # plotting
         if "labels" not in plot_kwargs and self.annotations is not None:
             # annotations to dict
             plot_kwargs["labels"] = {
                 k: list(v) for k, v in self.annotations.T.iterrows()
             }
-            plot_kwargs["labels"].update({"clusters": self.clusts})
+            if self.clusts is not None:
+                plot_kwargs["labels"].update({"clusters": self.clusts})
         if "colors" not in plot_kwargs:
-            if show_clusts:
+            if show_clusts and self.clusts is not None:
                 col = {l: i for i, l in enumerate(set(self.clusts))}
                 plot_kwargs.update({"colors": [col[x] for x in self.clusts]})
             else:
@@ -931,6 +938,7 @@ class Celligner(object):
         if "radi" not in plot_kwargs:
             plot_kwargs.update({"radi": 0.1})
         print("making plot...")
+
         p = plot.scatter(self.umap_reduced, **plot_kwargs)
         plot_kwargs = {}
         return p
