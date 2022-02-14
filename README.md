@@ -11,7 +11,7 @@ See our latest paper on aligning CCLE cell lines with TCGA tumors:
 
 __Celligner__ is initially an R project that you can find in the `R/` folder.
 
-A Python version was made that is the exact same version as the R verion. However one should not expect the same plot for a couple reasons:
+A Python version was made that performs the exact same computations as the R version. However one should not expect the exact same plot for a couple reasons:
 
 #### UMAP
 
