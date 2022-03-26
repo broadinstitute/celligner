@@ -33,7 +33,9 @@ import mnnpy
 
 
 def runDiffExprOnCluster(
-    expression, clustered, clust_covariates=None,
+    expression,
+    clustered,
+    clust_covariates=None,
 ):
     """
     Runs DESEQ2 on the clustered data.
@@ -103,9 +105,9 @@ class Celligner(object):
 
         Args:
             onlyGenes (str, optional): one of 'usefull', 'all', 'protein_coding'. Defaults to "usefull".
-            gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes 
+            gene_file (pd.Dataframe, optional): Needs to contain at least 15000 genes
                 and an "ensembl_gene_id", columns. Defaults to None.
-            ensemble_server (str, optional): the ensembl biomart server to map genes to. 
+            ensemble_server (str, optional): the ensembl biomart server to map genes to.
                 Defaults to "http://nov2020.archive.ensembl.org/biomart".
             umap_kwargs (dict, optional): see params.py . Defaults to {}.
             pca_kwargs (dict, optional): see see params.py . Defaults to {}.
@@ -207,7 +209,11 @@ class Celligner(object):
         return X_pression
 
     def addToFit(
-        self, X_pression, annotations=None, do_fit=True, do_add=True,
+        self,
+        X_pression,
+        annotations=None,
+        do_fit=True,
+        do_add=True,
     ):
         """adds expression data to the fit dataframe
 
@@ -259,10 +265,10 @@ class Celligner(object):
         """fit the model using X_pression
 
         Args:
-            X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with 
+            X_pression (pd.Dataframe): contains the expression data as RSEM expected counts with
                 ensembl_gene_id as columns and samplenames as index.
-            annotations (pd.Dataframe, optional): sample annotations, for each sample, 
-                needs to contain ['cell_type', 'disease_type', 'tissue_type']. 
+            annotations (pd.Dataframe, optional): sample annotations, for each sample,
+                needs to contain ['cell_type', 'disease_type', 'tissue_type'].
                 Defaults to None (will create an empty dataframe).
             _rerun (bool, optional): whether to rerun the function entirely or not. Defaults to True.
 
@@ -429,6 +435,7 @@ class Celligner(object):
         annotations=None,
         only_transform=False,
         _rerun=True,
+        _doCPCA=True,
         recompute_contamination=True,
     ):
         """transform the cell type for each sample in X_pression
@@ -509,7 +516,6 @@ class Celligner(object):
             raise ValueError(
                 "only one cluster found, no differential expression, try changing the parameters..."
             )
-
         if _rerun:
             differential_genes = runDiffExprOnCluster(
                 self.transform_input, self.transform_clusters
@@ -546,68 +552,72 @@ class Celligner(object):
                     self.differential_genes_names.append(
                         differential_genes.index[i // 2]
                     )
+            if _doCPCA:
+                if recompute_contamination:
+                    # removing cluster averages to samples clusters
+                    # TODO: take care of outlier cluster when outlier is authorized
+                    centered_fit_input = pd.concat(
+                        [
+                            self.fit_input.loc[self.fit_clusters == val]
+                            - self.fit_input.loc[self.fit_clusters == val].mean(axis=0)
+                            for val in set(self.fit_clusters)
+                        ]
+                    )
+                    centered_transform_input = pd.concat(
+                        [
+                            self.transform_input.loc[self.transform_clusters == val]
+                            - self.transform_input.loc[
+                                self.transform_clusters == val
+                            ].mean(axis=0)
+                            for val in set(self.transform_clusters)
+                        ]
+                    )
 
-            if recompute_contamination:
-                # removing cluster averages to samples clusters
-                # TODO: take care of outlier cluster when outlier is authorized
-                centered_fit_input = pd.concat(
-                    [
-                        self.fit_input.loc[self.fit_clusters == val]
-                        - self.fit_input.loc[self.fit_clusters == val].mean(axis=0)
-                        for val in set(self.fit_clusters)
-                    ]
-                )
-                centered_transform_input = pd.concat(
-                    [
-                        self.transform_input.loc[self.transform_clusters == val]
-                        - self.transform_input.loc[self.transform_clusters == val].mean(
-                            axis=0
+                    # doing cPCA on the dataset
+                    print("doing cPCA..")
+                    # TODO? a bit different from R's version as it was using an approximate solver for the eigen problem
+                    # TODO: try the automated version, (select the best alpha above 1?)
+                    self.cpca_loadings = (
+                        CPCA(
+                            standardize=False,
+                            n_components=self.cpca_ncomp,
+                            low_memory=self.low_mem,
                         )
-                        for val in set(self.transform_clusters)
-                    ]
-                )
+                        .fit(
+                            background=centered_transform_input,
+                            foreground=centered_fit_input,
+                            preprocess_with_pca_dim=centered_fit_input.shape[1],
+                        )
+                        .transform(
+                            only_loadings=True,
+                            return_alphas=False,
+                            alpha_selection="manual",
+                            **self.cpca_kwargs,
+                        )
+                    )
+                    del centered_transform_input, centered_fit_input
 
-                # doing cPCA on the dataset
-                print("doing cPCA..")
-                # TODO? a bit different from R's version as it was using an approximate solver for the eigen problem
-                # TODO: try the automated version, (select the best alpha above 1?)
-                self.cpca_loadings = (
-                    CPCA(
-                        standardize=False,
-                        n_components=self.cpca_ncomp,
-                        low_memory=self.low_mem,
-                    )
-                    .fit(
-                        background=centered_transform_input,
-                        foreground=centered_fit_input,
-                        preprocess_with_pca_dim=centered_fit_input.shape[1],
-                    )
-                    .transform(
-                        only_loadings=True,
-                        return_alphas=False,
-                        alpha_selection="manual",
-                        **self.cpca_kwargs
-                    )
-                )
-                del centered_transform_input, centered_fit_input
-
-        # regress out the cPCA components from the data
-        print("regressing out the cPCA components..")
-        # take the residuals of the linear regression of fit_input with the cpca_loadings
-        transformed_fit = (
-            self.fit_input
-            - LinearRegression(fit_intercept=False)
-            .fit(self.cpca_loadings.T, self.fit_input.T)
-            .predict(self.cpca_loadings.T)
-            .T
-        )
-        transformed_transform = (
-            self.transform_input
-            - LinearRegression(fit_intercept=False)
-            .fit(self.cpca_loadings.T, self.transform_input.T)
-            .predict(self.cpca_loadings.T)
-            .T
-        )
+        if _doCPCA:
+            # regress out the cPCA components from the data
+            print("regressing out the cPCA components..")
+            # take the residuals of the linear regression of fit_input with the cpca_loadings
+            transformed_fit = (
+                self.fit_input
+                - LinearRegression(fit_intercept=False)
+                .fit(self.cpca_loadings.T, self.fit_input.T)
+                .predict(self.cpca_loadings.T)
+                .T
+            )
+            transformed_transform = (
+                self.transform_input
+                - LinearRegression(fit_intercept=False)
+                .fit(self.cpca_loadings.T, self.transform_input.T)
+                .predict(self.cpca_loadings.T)
+                .T
+            )
+        else:
+            transformed_fit = self.fit_input
+            transformed_transform = self.transform_input
 
         varsubset = np.array(
             [
@@ -623,7 +633,7 @@ class Celligner(object):
                 transformed_transform,
                 var_index=list(range(len(transformed_fit.columns))),
                 var_subset=varsubset,
-                **self.mnn_kwargs
+                **self.mnn_kwargs,
             )
             # marioniCorrect(transformed_fit.values,
             #  transformed_transform.values, var_index = list(range(len(transformed_fit.columns))),
@@ -635,7 +645,7 @@ class Celligner(object):
                 transformed_transform.values,
                 var_index=list(range(len(transformed_fit.columns))),
                 varsubset=varsubset,
-                **self.mnn_kwargs
+                **self.mnn_kwargs,
             )
             self.mnn_pairs = mnn_pairs[-1]
             self.corrected = pd.DataFrame(
@@ -659,7 +669,7 @@ class Celligner(object):
         fit_annotations=None,
         transform_X_pression=None,
         transform_annotations=None,
-        only_transform=False,
+        **transform_kwargs,
     ):
         """fit_transform the data and transform the data.
 
@@ -674,7 +684,9 @@ class Celligner(object):
             pandas.DataFrame: the transformed data.
         """
         self.fit(fit_X_pression, fit_annotations)
-        return self.transform(transform_X_pression, transform_annotations)
+        return self.transform(
+            transform_X_pression, transform_annotations, **transform_kwargs
+        )
 
     def save(self, folder, asData=False):
         """save the model to a folder
@@ -801,6 +813,7 @@ class Celligner(object):
             with open(os.path.join(folder, "model.pkl"), "rb") as f:
                 model = pickle.load(f)
             self.__dict__.update(model.__dict__)
+        return self
 
     def plot(
         self,
@@ -813,7 +826,7 @@ class Celligner(object):
         annotations=None,
         rerun=True,
         colortable=None,
-        **plot_kwargs
+        **plot_kwargs,
     ):
         """plot the model
 
@@ -888,7 +901,7 @@ class Celligner(object):
                 annotations = ann
             self.umap_reduced = umap_reduced
             self.annotations = annotations
-            if len(self.clusts) != len(self.annotations):
+            if len(clusts) != len(self.annotations):
                 print("some clustering hasn't been done or redone, not using clusters")
                 self.clusts = None
             else:
@@ -1062,7 +1075,7 @@ class Celligner(object):
         return pd.DataFrame(simi_score, index=list(clusts), columns=list(clusts))
 
     def QCresults(self, ofcell, incell, k=5, n_jobs=-1):
-        """Gives an alignment quality value 
+        """Gives an alignment quality value
 
         Args:
             ofcell (str): cell to get the KNN of
@@ -1082,4 +1095,3 @@ class Celligner(object):
         self.makeSimiScore(ofcell)
         self.makeSimiScore(incell)
         # for val in
-

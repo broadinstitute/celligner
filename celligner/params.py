@@ -1,68 +1,64 @@
 TISSUE_COLOR = {
-    'engineered': "#bcdfbd",
-    'fibroblast': "#9eAeAe",
-    'other': "#A3969d",
-    'skin': "#969696",
-    'soft_tissue': "#cedb9c", #put it closer to bone
-    'sarcomatoid': "#cdcdbd",
-    'unknown': "#bdbdbd",
-    'NS': "#becdbd",
-    'teratoma': "#252525", 
-    'germ_cell': "#c7c7c7",
-    'embryo': "#7f7f7f",
-    'bone': "#aec7e8",
-    'lymphocyte': "#17becf",
-    'plasma_cell': "#9edae5",
-    'blood': "#1f77b4",
-    'engineered_blood': "#2f87b4",
-
-    'central_nervous_system': "#ff7f0e",
-    'engineered_central_nervous_system': "#ff8f3f",
-    'peripheral_nervous_system': "#ffbb78",
-    'nerve': "#dbdb8d",
-    'autonomic_ganglia': "#ebcb8d",
-    'eye': "#bcbd22",
-
-    'lung': "#d62728",
-    'engineered_lung': "#ee2e3e",
-    'upper_aerodigestive': "#ff9896",
-    'esophagus': "#e7969c",
-    'nasopharynx': "#f7b6d2",
-    'oral': "#feceee",
-    'parotid': "#fdbf6f",
-    'stomach': "#e377c2",
-    'gall_bladder': "#ff7f0e",
-    'bile_duct': "#a55194",
-    'pancreas':"#e377c2",
-    'liver': "#9467bd",
-    'gastric':"#c49c94",
-    'small_intestine':"#9e5e6e",
-    'colon': "#8c564b",
-
-    'ovary': "#2ca02c",
-    'engineered_ovary': "#4eae4e",
-    'uterus': "#98df8a",
-    'cervix': "#5ab172",
-
-    'breast': "#393b79",
-    'engineered_breast': "#4e3e7e",
-
-    'kidney': "#386cb0",
-    'engineered_kidney': "#386cb0",
-    'bladder': "#397cb9",
-    'urinary_tract':"#b644dc",
-    'prostate': "#637939",
-    'engineered_prostate': "#6e7e3e",
-    'testis': "#8c6d31",
-
-    'thyroid': "#8f7e3e",
-    'endocrine': "#bd9e39",
-    'pineal': "#e7ba52",
-    'adrenal': "#8ca252",
+    "engineered": "#bcdfbd",
+    "fibroblast": "#9eAeAe",
+    "other": "#A3969d",
+    "skin": "#969696",
+    "soft_tissue": "#cedb9c",  # put it closer to bone
+    "sarcomatoid": "#cdcdbd",
+    "unknown": "#bdbdbd",
+    "NS": "#becdbd",
+    "teratoma": "#252525",
+    "germ_cell": "#c7c7c7",
+    "embryo": "#7f7f7f",
+    "bone": "#aec7e8",
+    "lymphocyte": "#17becf",
+    "plasma_cell": "#9edae5",
+    "blood": "#1f77b4",
+    "engineered_blood": "#2f87b4",
+    "central_nervous_system": "#ff7f0e",
+    "engineered_central_nervous_system": "#ff8f3f",
+    "peripheral_nervous_system": "#ffbb78",
+    "nerve": "#dbdb8d",
+    "autonomic_ganglia": "#ebcb8d",
+    "eye": "#bcbd22",
+    "lung": "#d62728",
+    "engineered_lung": "#ee2e3e",
+    "upper_aerodigestive": "#ff9896",
+    "esophagus": "#e7969c",
+    "nasopharynx": "#f7b6d2",
+    "oral": "#feceee",
+    "parotid": "#fdbf6f",
+    "stomach": "#e377c2",
+    "gall_bladder": "#ff7f0e",
+    "bile_duct": "#a55194",
+    "ampulla_of_vater": "#ad3184",
+    "pancreas": "#e377c2",
+    "liver": "#9467bd",
+    "gastric": "#c49c94",
+    "small_intestine": "#9e5e6e",
+    "colon": "#8c564b",
+    "ovary": "#2ca02c",
+    "engineered_ovary": "#4eae4e",
+    "uterus": "#98df8a",
+    "cervix": "#5ab172",
+    "breast": "#393b79",
+    "engineered_breast": "#4e3e7e",
+    "kidney": "#386cb0",
+    "engineered_kidney": "#386cb0",
+    "bladder": "#397cb9",
+    "urinary_tract": "#b644dc",
+    "prostate": "#637939",
+    "engineered_prostate": "#6e7e3e",
+    "testis": "#8c6d31",
+    "thyroid": "#8f7e3e",
+    "endocrine": "#bd9e39",
+    "pineal": "#e7ba52",
+    "adrenal": "#8ca252",
 }
 
 TISSUE_COLOR_R = {
-    "central_nervous_system": "#f5899e", "engineered_central_nervous_system": "#f5899e",
+    "central_nervous_system": "#f5899e",
+    "engineered_central_nervous_system": "#f5899e",
     "teratoma": "#f5899e",
     "bone": "#9f55bb",
     "pancreas": "#b644dc",
@@ -72,10 +68,13 @@ TISSUE_COLOR_R = {
     "blood": "#da45bb",
     "lymphocyte": "#abd23f",
     "peripheral_nervous_system": "#73e03d",
-    "ovary": "#56e79d", "engineered_ovary": "#56e79d",
-    "adrenal": "#e13978", "adrenal_cortex": "#e13978",
+    "ovary": "#56e79d",
+    "engineered_ovary": "#56e79d",
+    "adrenal": "#e13978",
+    "adrenal_cortex": "#e13978",
     "upper_aerodigestive": "#5da134",
-    "kidney": "#1f8fff", "engineered_kidney": "#1f8fff",
+    "kidney": "#1f8fff",
+    "engineered_kidney": "#1f8fff",
     "gastric": "#dfbc3a",
     "eye": "#349077",
     "nasopharynx": "#a9e082",
@@ -83,22 +82,26 @@ TISSUE_COLOR_R = {
     "unknown": "#999999",
     "cervix": "#5ab172",
     "thyroid": "#d74829",
-    "lung": "#51d5e0", "engineered_lung": "#51d5e0",
+    "lung": "#51d5e0",
+    "engineered_lung": "#51d5e0",
     "rhabdoid": "#d04850",
-    "germ_cell": "#75dfbb", "embryo": "#75dfbb",
+    "germ_cell": "#75dfbb",
+    "embryo": "#75dfbb",
     "colorectal": "#96568e",
     "endocrine": "#d1d684",
     "bile_duct": "#c091e3",
     "pineal": "#949031",
     "thymus": "#659fd9",
     "mesothelioma": "#dc882d",
-    "prostate": "#3870c9", "engineered_prostate": "#3870c9",
+    "prostate": "#3870c9",
+    "engineered_prostate": "#3870c9",
     "uterus": "#e491c1",
-    "breast": "#45a132", "engineered_breast": "#45a132",
+    "breast": "#45a132",
+    "engineered_breast": "#45a132",
     "urinary_tract": "#e08571",
     "esophagus": "#6a6c2c",
     "fibroblast": "#d8ab6a",
-    "plasma_cell": "#e6c241"
+    "plasma_cell": "#e6c241",
 }
 
 USEFUL_GENE_BIOTYPES = {
@@ -129,7 +132,7 @@ MIN_GENES = 5000
 
 # differentially expressed genes with a rank better than this is in the cell line
 # or tumor data are used to identify mutual nearest neighbors in the MNN alignment step
-TOP_K_GENES=1000
+TOP_K_GENES = 1000
 
 # @see Celligner package
 GENE_TYPE = "usefull"
@@ -333,7 +336,7 @@ UMAP_PARAMS = {
 
 # @see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
 PCA_PARAMS = {
-    'n_components': 70,
+    "n_components": 70,
 }
 
 """
@@ -347,13 +350,11 @@ SNN parameters:
 """
 SNN_PARAMS = {
     "neighbor_num": 20,
-    "min_shared_neighbor_proportion": 1/15,
+    "min_shared_neighbor_proportion": 1 / 15,
 }
 
 # @see https://github.com/abidlabs/contrastive README
-CPCA_PARAMS = {
-    "alpha_value": 1
-}
+CPCA_PARAMS = {"alpha_value": 1}
 # number of dimensions to reduce to in the embedding
 CPCA_NCOMP = 4
 
@@ -418,22 +419,22 @@ CPCA_NCOMP = 4
 """
 # @see https://github.com/chriscainx/mnnpy/blob/master/mnnpy/mnn.py
 MNN_PARAMS = {
-    "k1":5,
-    "k2":50,
+    "k1": 5,
+    "k2": 50,
 }
 
-#MNN_PARAMS = {
+# MNN_PARAMS = {
 #  "var_adj": True,
 #  "svd_mode": "rsvd",
 #  "svd_dim": None,
-#}
+# }
 # @see https://scanpy.readthedocs.io/en/latest/generated/scanpy.tl.louvain.html
 LOUVAIN_PARAMS = {
-    'resolution': 5,
+    "resolution": 5,
 }
 
 # @see https://scanpy.readthedocs.io/en/stable/generated/scanpy.pp.neighbors.html
 SC_NEIGH_PARAMS = {
     "n_neighbors": 20,
-    'n_pcs': 70,
+    "n_pcs": 70,
 }
