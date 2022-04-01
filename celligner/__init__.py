@@ -163,6 +163,7 @@ class Celligner(object):
         self.pca_transform = None
         self.common_genes = None
         self.cpca_loadings = None
+        self.umap_reduced = None
 
     def _check_Xpression(self, X_pression, gene_file):
         """

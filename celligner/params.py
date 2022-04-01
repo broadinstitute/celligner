@@ -31,6 +31,7 @@ TISSUE_COLOR = {
     "stomach": "#e377c2",
     "gall_bladder": "#ff7f0e",
     "bile_duct": "#a55194",
+    "engineered_bile_duct": "#a55194",
     "ampulla_of_vater": "#ad3184",
     "pancreas": "#e377c2",
     "liver": "#9467bd",
