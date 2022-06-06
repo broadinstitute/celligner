@@ -148,14 +148,10 @@ Please use _github issues_ for any problem related to the tool.
 
 ---
 
-__Maintainers:__
-
-Jérémie Kalfon @jkobject
-
-Javad Noorbak @jnoorbak
-
-James McFarland
-
-__Created by:__
+__Initial Project:__
 
 Allie Warren @awarren
+
+__Maintainer:__
+
+Jérémie Kalfon @jkobject
