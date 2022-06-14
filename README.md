@@ -62,6 +62,14 @@ In that case, please refer to our docker image:s
 
 A dockerized version is available at `jkobject:pycelligner`
 
+to install the latest unstaged version of Celligner in dev mode, do:
+
+```bash
+git clone https://github.com/broadinstitute/celligner.git
+cd celligner
+pip install -e .
+```
+
 ## For developers
 
 see `CONTRIBUTING.md`
