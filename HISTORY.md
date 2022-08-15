@@ -4,6 +4,7 @@ Changelog
 
 (unreleased)
 ------------
+- Release: version  🚀 [Jérémie Kalfon]
 - Update setup.py. [Jérémie Kalfon]
 - Update requirements.txt. [Jérémie Kalfon]
 - Update README.md. [Jérémie Kalfon]
