@@ -76,9 +76,9 @@ setup(
 
 try: 
   subprocess.run(
-    "pip install git+https://github.com/jkobject/mnnpy", shell=True, check=True, 
+    "git submodule update --remote --init", shell=True, check=True, 
     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 except:
-  print('failed to install mnnpy. \
-    please install Python or check your Python installation and then install mnnpy with:\
-    pip install git+https://github.com/jkobject/mnnpy')
+  print('failed to install the mnnpy and CPCA submodules. \
+    please install Python or check your Python installation and then install mnnpy & cpca with:\
+    cd PROJECTLOC && git submodule update --remote --init')
