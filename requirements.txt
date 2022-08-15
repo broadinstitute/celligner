@@ -1,7 +1,6 @@
 umap_learn>=0.3
 numpy
 pandas
-contrastive>=1.1
 Broad-genepy>=1.1.2
 scikit_learn>=0.24
 umap>=0.1
