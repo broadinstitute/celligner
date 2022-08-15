@@ -1,4 +1,4 @@
-# Celligner
+# Celligner1
 from re import sub
 from celligner.params import *
 from celligner import limma
