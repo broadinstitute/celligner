@@ -53,16 +53,18 @@ Go here for some usage examples: [https://raw.githack.com/broadinstitute/cellign
 > TO see the old R package installation instruction, see the `R/`folder.
 
 Before running pip, make sure that you have R installed.
+Please use an up to date version of python (>=3.8).
+Note that some people have had issues with mnnpy installation and needed to have cython installed first.
 
 `pip install celligner`
 
-Even with R, some platform might not have all the required packages already installed (thanks R for being so easy to work with!)
+Even with R, some platform might not have all the required packages already installed.
 
-In that case, please refer to our docker image:s
+In that case, please refer to our docker image (see Dockerfile)
 
-A dockerized version is available at `jkobject:pycelligner`
+The dockerized version is available at `jkobject:pycelligner`
 
-to install the latest unstaged version of Celligner in dev mode, do:
+to install the latest version of Celligner in dev mode, do:
 
 ```bash
 git clone https://github.com/broadinstitute/celligner.git
