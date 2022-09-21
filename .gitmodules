@@ -1,0 +1,3 @@
+[submodule "mnnpy"]
+	path = mnnpy
+	url = git@github.com:DeKegel/mnnpy.git
