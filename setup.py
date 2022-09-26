@@ -10,8 +10,6 @@ if sys.version_info.minor < 5:
   import warnings
   warnings.warn("celligner may not function properly on Python < 3.5")
 
-#os.system('git submodule init && git submodule sync')
-
 print("trying to install the required limma R package")
 try:
   subprocess.run(
@@ -56,8 +54,7 @@ setup(
   description='A useful module for alligning cell lines to tumors',
   long_description=read("README.md"),
   long_description_content_type="text/markdown",
-  author='Jeremie Kalfon',
-  author_email='jkobject@gmail.com',
+  author="Broad Institute CDS",
   url="https://github.com/BroadInstitute/celligner",
   packages=find_packages(exclude=["tests", ".github"]),
   package_data={'celligner': ['data/*']},
@@ -66,7 +63,7 @@ setup(
   entry_points={
     "console_scripts": ["celligner = celligner.__main__:main"]
   },
-  extras_require={"test": read_requirements("requirements-test.txt")},
+  #extras_require={"test": read_requirements("requirements-test.txt")},
   classifiers=[
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
@@ -74,11 +71,11 @@ setup(
   ],
 )
 
-try: 
-  subprocess.run(
-    "git submodule update --remote --init", shell=True, check=True, 
-    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-except:
-  print('failed to install the mnnpy and CPCA submodules. \
-    please install Python or check your Python installation and then install mnnpy & cpca with:\
-    cd PROJECTLOC && git submodule update --remote --init')
+# try: 
+#   subprocess.run(
+#     "git submodule update --remote --init", shell=True, check=True, 
+#     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+# except:
+#   print('failed to install the mnnpy and CPCA submodules. \
+#     please install Python or check your Python installation and then install mnnpy & cpca with:\
+#     cd PROJECTLOC && git submodule update --remote --init')

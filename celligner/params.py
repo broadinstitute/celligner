@@ -135,8 +135,6 @@ MIN_GENES = 5000
 # or tumor data are used to identify mutual nearest neighbors in the MNN alignment step
 TOP_K_GENES = 1000
 
-# @see Celligner package
-GENE_TYPE = "usefull"
 
 """
 @see https://umap-learn.readthedocs.io/en/latest/parameters.html
@@ -187,18 +185,6 @@ UMAP Parameters
         can have arguments passed via the metric_kwds dictionary. At this
         time care must be taken and dictionary elements must be ordered
         appropriately; this will hopefully be fixed in the future.
-    n_epochs: int(optional, default None)
-        The number of training epochs to be used in optimizing the
-        low dimensional embedding. Larger values result in more accurate
-        embeddings. If None is specified a value will be selected based on
-        the size of the input dataset(200 for large datasets, 500 for small).
-    learning_rate: float(optional, default 1.0)
-        The initial learning rate for the embedding optimization.
-    init: string(optional, default 'spectral')
-        How to initialize the low dimensional embedding. Options are:
-                * 'spectral': use a spectral embedding of the fuzzy 1-skeleton
-                * 'random': assign initial embedding positions at random.
-                * A numpy array of initial embedding positions.
     min_dist: float(optional, default 0.1)
         The effective minimum distance between embedded points. Smaller values
         will result in a more clustered/clumped embedding where nearby points
@@ -206,127 +192,11 @@ UMAP Parameters
         result on a more even dispersal of points. The value should be set
         relative to the ``spread`` value, which determines the scale at which
         embedded points will be spread out.
-    spread: float(optional, default 1.0)
-        The effective scale of embedded points. In combination with ``min_dist``
-        this determines how clustered/clumped the embedded points are.
     low_memory: bool(optional, default True)
         For some datasets the nearest neighbor computation can consume a lot of
         memory. If you find that UMAP is failing due to memory constraints
         consider setting this option to True. This approach is more
         computationally expensive, but avoids excessive memory use.
-    set_op_mix_ratio: float(optional, default 1.0)
-        Interpolate between(fuzzy) union and intersection as the set operation
-        used to combine local fuzzy simplicial sets to obtain a global fuzzy
-        simplicial sets. Both fuzzy set operations use the product t-norm.
-        The value of this parameter should be between 0.0 and 1.0; a value of
-        1.0 will use a pure fuzzy union, while 0.0 will use a pure fuzzy
-        intersection.
-    local_connectivity: int(optional, default 1)
-        The local connectivity required - - i.e. the number of nearest
-        neighbors that should be assumed to be connected at a local level.
-        The higher this value the more connected the manifold becomes
-        locally. In practice this should be not more than the local intrinsic
-        dimension of the manifold.
-    repulsion_strength: float(optional, default 1.0)
-        Weighting applied to negative samples in low dimensional embedding
-        optimization. Values higher than one will result in greater weight
-        being given to negative samples.
-    negative_sample_rate: int(optional, default 5)
-        The number of negative samples to select per positive sample
-        in the optimization process. Increasing this value will result
-        in greater repulsive force being applied, greater optimization
-        cost, but slightly more accuracy.
-    transform_queue_size: float(optional, default 4.0)
-        For transform operations(embedding new points using a trained model_
-        this will control how aggressively to search for nearest neighbors.
-        Larger values will result in slower performance but more accurate
-        nearest neighbor evaluation.
-    a: float(optional, default None)
-        More specific parameters controlling the embedding. If None these
-        values are set automatically as determined by ``min_dist`` and ``spread``.
-    b: float(optional, default None)
-        More specific parameters controlling the embedding. If None these
-        values are set automatically as determined by ``min_dist`` and ``spread``.
-    random_state: int, RandomState instance or None, optional(default: None)
-        If int, random_state is the seed used by the random number generator;
-        If RandomState instance, random_state is the random number generator;
-        If None, the random number generator is the RandomState instance used
-        by `np.random`.
-    metric_kwds: dict(optional, default None)
-        Arguments to pass on to the metric, such as the ``p`` value for
-        Minkowski distance. If None then no arguments are passed on.
-    angular_rp_forest: bool(optional, default False)
-        Whether to use an angular random projection forest to initialise
-        the approximate nearest neighbor search. This can be faster, but is
-        mostly on useful for metric that use an angular style distance such
-        as cosine, correlation etc. In the case of those metrics angular forests
-        will be chosen automatically.
-    target_n_neighbors: int(optional, default - 1)
-        The number of nearest neighbors to use to construct the target simplcial
-        set. If set to - 1 use the ``n_neighbors`` value.
-    target_metric: string or callable(optional, default 'categorical')
-        The metric used to measure distance for a target array is using supervised
-        dimension reduction. By default this is 'categorical' which will measure
-        distance in terms of whether categories match or are different. Furthermore,
-        if semi-supervised is required target values of - 1 will be trated as
-        unlabelled under the 'categorical' metric. If the target array takes
-        continuous values(e.g. for a regression problem) then metric of 'l1'
-        or 'l2' is probably more appropriate.
-    target_metric_kwds: dict(optional, default None)
-        Keyword argument to pass to the target metric when performing
-        supervised dimension reduction. If None then no arguments are passed on.
-    target_weight: float(optional, default 0.5)
-        weighting factor between data topology and target topology. A value of
-        0.0 weights entirely on data, a value of 1.0 weights entirely on target.
-        The default of 0.5 balances the weighting equally between data and target.
-    transform_seed: int(optional, default 42)
-        Random seed used for the stochastic aspects of the transform operation.
-        This ensures consistency in transform operations.
-    verbose: bool(optional, default False)
-        Controls verbosity of logging.
-    tqdm_kwds: dict(optional, defaul None)
-        Key word arguments to be used by the tqdm progress bar.
-    unique: bool(optional, default False)
-        Controls if the rows of your data should be uniqued before being
-        embedded.  If you have more duplicates than you have n_neighbour
-        you can have the identical data points lying in different regions of
-        your space.  It also violates the definition of a metric.
-        For to map from internal structures back to your data use the variable
-        _unique_inverse_.
-    densmap: bool(optional, default False)
-        Specifies whether the density-augmented objective of densMAP
-        should be used for optimization. Turning on this option generates
-        an embedding where the local densities are encouraged to be correlated
-        with those in the original space. Parameters below with the prefix 'dens'
-        further control the behavior of this extension.
-    dens_lambda: float(optional, default 2.0)
-        Controls the regularization weight of the density correlation term
-        in densMAP. Higher values prioritize density preservation over the
-        UMAP objective, and vice versa for values closer to zero. Setting this
-        parameter to zero is equivalent to running the original UMAP algorithm.
-    dens_frac: float(optional, default 0.3)
-        Controls the fraction of epochs(between 0 and 1) where the
-        density-augmented objective is used in densMAP. The first
-        (1 - dens_frac) fraction of epochs optimize the original UMAP objective
-        before introducing the density correlation term.
-    dens_var_shift: float(optional, default 0.1)
-        A small constant added to the variance of local radii in the
-        embedding when calculating the density correlation objective to
-        prevent numerical instability from dividing by a small number
-    output_dens: float(optional, default False)
-        Determines whether the local radii of the final embedding(an inverse
-        measure of local density) are computed and returned in addition to
-        the embedding. If set to True, local radii of the original data
-        are also included in the output for comparison; the output is a tuple
-        (embedding, original local radii, embedding local radii). This option
-        can also be used when densmap=False to calculate the densities for
-        UMAP embeddings.
-    disconnection_distance: float(optional, default np.inf or maximal value for bounded distances)
-        Disconnect any vertices of distance greater than or equal to disconnection_distance when approximating the
-        manifold via our k-nn graph. This is particularly useful in the case that you have a bounded metric.  The
-        UMAP assumption that we have a connected manifold can be problematic when you have points that are maximally
-        different from all the rest of your data.  The connected manifold assumption will make such points have perfect
-        similarity to a random set of other points.  Too many such points will artificially connect your space.
 """
 UMAP_PARAMS = {
     "n_neighbors": 10,
@@ -338,20 +208,6 @@ UMAP_PARAMS = {
 # @see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
 PCA_PARAMS = {
     "n_components": 70,
-}
-
-"""
-SNN parameters:
----------------
-    neighbor_num : int
-        K number of neighbors to consider for shared nearest neighbor similarity
-    min_shared_neighbor_proportion : float [0, 1]
-        Proportion of the K nearest neighbors that need to share two data points to be considered part of the same cluster
-    Note: Naming conventions for attributes are based on the analogous ones of DBSCAN
-"""
-SNN_PARAMS = {
-    "neighbor_num": 20,
-    "min_shared_neighbor_proportion": 1 / 15,
 }
 
 # @see https://github.com/abidlabs/contrastive README
@@ -419,16 +275,20 @@ CPCA_NCOMP = 4
         optional keyword arguments for irlb.
 """
 # @see https://github.com/chriscainx/mnnpy/blob/master/mnnpy/mnn.py
-MNN_PARAMS = {
-    "k1": 5,
-    "k2": 50,
-}
-
 # MNN_PARAMS = {
 #  "var_adj": True,
 #  "svd_mode": "rsvd",
 #  "svd_dim": None,
 # }
+
+# For Mariona method (default)
+MNN_PARAMS = {
+    "k1": 5,
+    "k2": 50,
+    "cosine_norm": False,
+    "fk": 5
+}
+
 # @see https://scanpy.readthedocs.io/en/latest/generated/scanpy.tl.louvain.html
 LOUVAIN_PARAMS = {
     "resolution": 5,

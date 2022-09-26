@@ -38,10 +38,7 @@ class limmapy:
     '''
 
     def __init__(self):
-        print("you need to have R installed with the limma library installed")
-        print(rpy2.__version__)
         self.limma_result = None
-
 
     def lmFit(self, count_matrix, design_matrix, **kwargs):  # OPTIONAL
         """
