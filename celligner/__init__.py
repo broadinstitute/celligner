@@ -250,22 +250,25 @@ class Celligner(object):
         return self
 
 
-    def transform(self, target_expr, target_annot=None, compute_cPCs=True):
+    def transform(self, target_expr=None, target_annot=None, compute_cPCs=True):
         """Align samples in the target dataset to samples in the reference dataset
 
         Args:
-            target_expr (pd.Dataframe): target expression matrix of samples (rows) by genes (columns), 
+            target_expr (pd.Dataframe, optional): target expression matrix of samples (rows) by genes (columns), 
                 where genes are ensembl gene IDs. Data should be log2(X+1) TPM data.
-                In the standard Celligner pipeline this the tumor data (TCGA).
+                In the standard Celligner pipeline this the tumor data (TCGA). 
+                Set to None if re-running transform with new reference data.
             target_annot (pd.Dataframe, optional): sample annotations for the target dataframe,
                 needs to contain ['cell_type', 'disease_type', 'tissue_type'].
                 Defaults to None (will create an empty dataframe).
-            compute_cPCs (bool, optional): if True, compute cPCs from the fitted reference and target expression.
+            compute_cPCs (bool, optional): if True, compute cPCs from the fitted reference and target expression. Defaults to True.
 
         Raises:
             ValueError: if compute_cPCs is True but there is no reference input (fit has not been run)
             ValueError: if compute_cPCs is False but there are no previously computed cPCs available
-            ValueError: if there are no differentially expressed genes
+            ValueError: if compute_target_fit is False but there are no previously computed DE genes available for the target dataset
+            ValueError: if compute_target_fit is True but compute_cPCs is false (there is no use case for this)
+            ValueError: if there are not enough clusters to compute DE genes for the target dataset
         """
 
         if self.ref_input is None and compute_cPCs:
@@ -274,7 +277,10 @@ class Celligner(object):
         if not compute_cPCs and self.cpca_loadings is None:
             raise ValueError("Transform needs to be run with compute_cPCs==True at least once")
 
-        if compute_cPCs:
+        if not target_expr is None and self.target_de_genes is None:
+            raise ValueError("Transform needs to be run with a target expression dataset at least once")
+
+        if target_expr is not None:
 
             self.target_input, self.target_annotations = self.__checkExpression(target_expr, target_annot, check_genes=True)
 
@@ -287,6 +293,11 @@ class Celligner(object):
             # Union of the top 1000 differentially expressed genes in each dataset
             self.de_genes = list(set(self.ref_de_genes[:self.topKGenes].index) | 
                                 set(self.target_de_genes[:self.topKGenes].index))
+
+        else:
+            print("No target expression provided, using previously fit target dataset")
+
+        if compute_cPCs:
 
             # Subtract cluster average from cluster samples
             centered_ref_input = pd.concat(
