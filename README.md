@@ -37,21 +37,16 @@ See the `run_celligner.py` script for example usage.
 
 Before running pip, make sure that you have R installed.
 
-`pip install celligner`
-
-Even with R, some platform might not have all the required packages already installed (thanks R for being so easy to work with!)
-
-In that case, please refer to our docker image:s
-
-A dockerized version is available at `jkobject:pycelligner`
-
-to install the latest unstaged version of Celligner in dev mode, do:
+To install the latest version of Celligner in dev mode, do:
 
 ```bash
 git clone https://github.com/broadinstitute/celligner.git
+git checkout new_dev
 cd celligner
 pip install -e .
 ```
+
+A dockerfile and build script is also provided.
 
 ## For developers
 
