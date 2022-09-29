@@ -72,7 +72,6 @@ class Celligner(object):
 
         self.de_genes = None
         self.cpca_loadings = None
-        self.target_corrected = None
         self.combined_output = None
         
         self.umap_reduced = None
@@ -142,7 +141,7 @@ class Celligner(object):
 
         # Get PCs
         print("Doing PCA...")
-        sc.tl.pca(adata, n_comps=70, zero_center=True)
+        sc.tl.pca(adata, n_comps=70, zero_center=True, svd_solver='arpack')
 
         print("Computing neighbors...")
         # Find shared nearest neighbors (SNN) in PCA space
@@ -150,7 +149,7 @@ class Celligner(object):
         sc.pp.neighbors(adata, knn=True, use_rep='X_pca', **self.neighbors_kwargs)
         
         print("Clustering...")
-        sc.tl.louvain(adata, **self.louvain_kwargs)
+        sc.tl.louvain(adata, use_weights=True, **self.louvain_kwargs)
         fit_clusters = adata.obs["louvain"].values.astype(int)
         
         del adata
@@ -277,7 +276,7 @@ class Celligner(object):
         if not compute_cPCs and self.cpca_loadings is None:
             raise ValueError("Transform needs to be run with compute_cPCs==True at least once")
 
-        if not target_expr is None and self.target_de_genes is None:
+        if target_expr is None and self.target_de_genes is None:
             raise ValueError("Transform needs to be run with a target expression dataset at least once")
 
         if target_expr is not None:
@@ -348,7 +347,7 @@ class Celligner(object):
 
         # if self.mnn_method == "mnn_marioni":
         print("Doing the MNN analysis using Marioni et al. method..")
-        self.target_corrected, self.mnn_pairs = mnnpy.marioniCorrect(
+        target_corrected, self.mnn_pairs = mnnpy.marioniCorrect(
             transformed_ref,
             transformed_target,
             var_index=list(range(len(self.ref_input.columns))),
@@ -373,12 +372,15 @@ class Celligner(object):
         #     )
 
         if compute_cPCs:
-            self.combined_output =  pd.concat([self.target_corrected, transformed_ref])
+            self.combined_output =  pd.concat([target_corrected, transformed_ref])
             self.combined_annotations = pd.concat([self.target_annotations, self.ref_annotations])
         else: # Append at the end
-            self.combined_output =  pd.concat([self.ref_input, self.target_corrected]) 
+            self.combined_output =  pd.concat([self.ref_input, target_corrected]) 
             self.combined_annotations = pd.concat([self.ref_annotations, self.target_annotations])
         
+        del target_corrected
+        gc.collect()
+
         print('Done')
 
         return self
