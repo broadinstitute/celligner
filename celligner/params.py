@@ -1,9 +1,46 @@
+# Oncotree tissue colors
+TISSUE_COLOR_OT = {
+    "Adrenal Gland": "#E13978",
+    "Ampulla of Vater": "#F5899E",
+    "Biliary Tract": "#C091E3",
+    "Bladder/Urinary Tract":"#E08571",
+    "Bone": "#9F55BB",
+    "Breast":"#45A132",
+    "Bowel":"#96568E",
+    "CNS/Brain": "#F5899E",
+    "Cervix":"#5AB172",
+    "Esophagus/Stomach": "#DFBC3A",
+    "Eye": "#349077",
+    "Fibroblast": "#D8AB6A",
+    "Embryonal":"#75DFBB",
+    "Head and Neck": "#5DA134",
+    "Kidney": "#1F8FFF",
+    "Liver": "#9C5E2B",
+    "Lung": "#51D5E0",
+    "Lymphoid": "#ABD23F",
+    "Myeloid": "#DA45BB",
+    "Normal":"#555555",
+    "Ovary/Fallopian Tube": "#56E79D",
+    "Pancreas": "#B644DC",
+    "Peripheral Nervous System": "#73E03D",
+    "Pleura": "#F5899E", ###
+    "Prostate": "#3870C9",
+    "Skin": "#6C55E2",
+    "Soft Tissue": "#5FDB69",
+    "Testis": "#F5899E", ###
+    "Thymus": "#659FD9", 
+    "Thyroid": "#D74829",
+    "Other/Unknown": "#bdbdbd",
+    "Uterus": "#E491C1",
+    "Vulva/Vagina":"#E491C1"
+}
+
 TISSUE_COLOR = {
     "engineered": "#bcdfbd",
     "fibroblast": "#9eAeAe",
     "other": "#A3969d",
     "skin": "#969696",
-    "soft_tissue": "#cedb9c",  # put it closer to bone
+    "soft_tissue": "#cedb9c",
     "sarcomatoid": "#cdcdbd",
     "unknown": "#bdbdbd",
     "NS": "#becdbd",
@@ -53,8 +90,9 @@ TISSUE_COLOR = {
     "testis": "#8c6d31",
     "thyroid": "#8f7e3e",
     "endocrine": "#bd9e39",
-    "pineal": "#e7ba52",
+    "biliary_tract": "#e7ba52",
     "adrenal": "#8ca252",
+    "thymus": "#659fd9"
 }
 
 TISSUE_COLOR_R = {
@@ -105,197 +143,36 @@ TISSUE_COLOR_R = {
     "plasma_cell": "#e6c241",
 }
 
-USEFUL_GENE_BIOTYPES = {
-    "rRNA",
-    "Mt_rRNA",
-    "TR_V_gene",
-    "IG_J_gene",
-    "TEC",
-    "TR_D_gene",
-    "snoRNA",
-    "snRNA",
-    "IG_V_gene",
-    "scRNA",
-    "vault_RNA",
-    "lncRNA",
-    "miRNA",
-    "scaRNA",
-    "ribozyme",
-    "protein_coding",
-    "TR_C_gene",
-    "sRNA",
-    "TR_J_gene",
-    "IG_D_gene",
-    "IG_C_gene",
-}
 
-MIN_GENES = 5000
 
-# differentially expressed genes with a rank better than this is in the cell line
+#mnn_ndist = 3, # ndist parameter used for MNN
+
+# Differentially expressed genes with a rank better than this is in the cell line
 # or tumor data are used to identify mutual nearest neighbors in the MNN alignment step
 TOP_K_GENES = 1000
 
+# number of PCs to use for dimensionality reduction
+PCA_NCOMP = 70 
 
-"""
-@see https://umap-learn.readthedocs.io/en/latest/parameters.html
-
-UMAP Parameters
-----------
-    n_neighbors: float(optional, default 15)
-        The size of local neighborhood (in terms of number of neighboring
-        sample points) used for manifold approximation. Larger values
-        result in more global views of the manifold, while smaller
-        values result in more local data being preserved. In general
-        values should be in the range 2 to 100.
-    n_components: int(optional, default 2)
-        The dimension of the space to embed into. This defaults to 2 to
-        provide easy visualization, but can reasonably be set to any
-        integer value in the range 2 to 100.
-    metric: string or function(optional, default 'euclidean')
-        The metric to use to compute distances in high dimensional space.
-        If a string is passed it must match a valid predefined metric. If
-        a general metric is required a function that takes two 1d arrays and
-        returns a float can be provided. For performance purposes it is
-        required that this be a numba jit'd function. Valid string metrics
-        include:
-                * euclidean
-                * manhattan
-                * chebyshev
-                * minkowski
-                * canberra
-                * braycurtis
-                * mahalanobis
-                * wminkowski
-                * seuclidean
-                * cosine
-                * correlation
-                * haversine
-                * hamming
-                * jaccard
-                * dice
-                * russelrao
-                * kulsinski
-                * ll_dirichlet
-                * hellinger
-                * rogerstanimoto
-                * sokalmichener
-                * sokalsneath
-                * yule
-        Metrics that take arguments(such as minkowski, mahalanobis etc.)
-        can have arguments passed via the metric_kwds dictionary. At this
-        time care must be taken and dictionary elements must be ordered
-        appropriately; this will hopefully be fixed in the future.
-    min_dist: float(optional, default 0.1)
-        The effective minimum distance between embedded points. Smaller values
-        will result in a more clustered/clumped embedding where nearby points
-        on the manifold are drawn closer together, while larger values will
-        result on a more even dispersal of points. The value should be set
-        relative to the ``spread`` value, which determines the scale at which
-        embedded points will be spread out.
-    low_memory: bool(optional, default True)
-        For some datasets the nearest neighbor computation can consume a lot of
-        memory. If you find that UMAP is failing due to memory constraints
-        consider setting this option to True. This approach is more
-        computationally expensive, but avoids excessive memory use.
-"""
-UMAP_PARAMS = {
-    "n_neighbors": 10,
-    "min_dist": 0.5,
-    "metric": "euclidean",
-    "n_components": 2,
-}
-
-# @see https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html
-PCA_PARAMS = {
-    "n_components": 70,
-}
-
-# @see https://github.com/abidlabs/contrastive README
-CPCA_PARAMS = {"alpha_value": 1}
-# number of dimensions to reduce to in the embedding
+# number of cPCA dimensions to regress out of the data
 CPCA_NCOMP = 4
-
-
-"""
-    :param datas: `numpy.ndarray` or class:`anndata.AnnData`
-        Expression matrices or AnnData objects. Matrices should be shaped like n_obs * n_vars
-        (n_cell * n_gene) and have consistent number of columns. AnnData objects should have same
-        number of vars.
-    :param var_index: `list` or `None`, optional (default: None)
-        The index (list of str) of vars (genes). Necessary when using only a subset of vars to
-        perform MNN correction, and should be supplied with var_subset. When datas are AnnData
-        objects, var_index is ignored.
-    :param var_subset: `list` or `None`, optional (default: None)
-        The subset of vars (list of str) to be used when performing MNN correction. Typically, a
-        list of highly variable genes (HVGs). When set to None, uses all vars.
-    :param batch_key: `str`, optional (default: 'batch')
-        The batch_key for AnnData.concatenate. Only valid when do_concatenate and supplying AnnData
-        objects.
-    :param index_unique: `str`, optional (default: '-')
-        The index_unique for AnnData.concatenate. Only valid when do_concatenate and supplying
-        AnnData objects.
-    :param batch_categories: `list` or `None`, optional (default: None)
-        The batch_categories for AnnData.concatenate. Only valid when do_concatenate and supplying
-        AnnData objects.
-    :param k1: `int`, optional (default: 20)
-        Number of mutual nearest neighbors of 2 in 1.
-    :param k2: `int`, optional (default: 20)
-        Number of mutual nearest neighbors of 1 in 2.
-    :param sigma: `float`, optional (default: 1)
-        The bandwidth of the Gaussian smoothing kernel used to compute the correction vectors.
-    :param cos_norm_in: `bool`, optional (default: True)
-        Whether cosine normalization should be performed on the input data prior to calculating
-        distances between cells.
-    :param cos_norm_out: `bool`, optional (default: True)
-        Whether cosine normalization should be performed prior to computing corrected expression
-        values.
-    :param svd_dim: `int` or `None`, optional (default: None)
-        The number of dimensions to use for summarizing biological substructure within each batch.
-        If set to None, biological components will not be removed from the correction vectors.
-    :param var_adj: `bool`, optional (default: True)
-        Whether to adjust variance of the correction vectors. Note this step takes most computing
-        time.
-    :param compute_angle: `bool`, optional (default: False)
-        Whether to compute the angle between each cell’s correction vector and the biological
-        subspace of the reference batch.
-    :param mnn_order: `list` or `None`, optional (default: None)
-        The order in which batches are to be corrected. When set to None, datas are corrected
-        sequentially.
-    :param svd_mode: `str`, optional (default: 'rsvd')
-        One of 'svd', 'rsvd', and 'irlb'. 'svd' computes SVD using a non-randomized SVD-via-ID
-        algorithm, while 'rsvd' uses a randomized version. 'irlb' performes truncated SVD by
-        implicitly restarted Lanczos bidiagonalization (forked from https://github.com/airysen/irlbpy).
-    :param do_concatenate: `bool`, optional (default: True)
-        Whether to concatenate the corrected matrices or AnnData objects. Default is True.
-    :param save_raw: `bool`, optional (default: False)
-        Whether to save the original expression data in the .raw attribute of AnnData objects.
-    :param n_jobs: `int` or `None`, optional (default: None)
-        The number of jobs. When set to None, automatically uses the number of cores.
-    :param kwargs: `dict` or `None`, optional (default: None)
-        optional keyword arguments for irlb.
-"""
-# @see https://github.com/chriscainx/mnnpy/blob/master/mnnpy/mnn.py
-# MNN_PARAMS = {
-#  "var_adj": True,
-#  "svd_mode": "rsvd",
-#  "svd_dim": None,
-# }
-
-# For Mariona method (default)
-MNN_PARAMS = {
-    "k1": 5,
-    "k2": 50,
-    "cosine_norm": False,
-    "fk": 5
-}
 
 # @see https://scanpy.readthedocs.io/en/latest/generated/scanpy.tl.louvain.html
 LOUVAIN_PARAMS = {
-    "resolution": 5,
+    "resolution": 5, # resolution parameter used for clustering the data
 }
 
-# @see https://scanpy.readthedocs.io/en/stable/generated/scanpy.pp.neighbors.html
-SC_NEIGH_PARAMS = {
-    "n_neighbors": 20,
-    "n_pcs": 70,
+# For Mariona method (default)
+MNN_PARAMS = {
+    "k1": 5, # number of nearest neighbors of tumors in the cell line data
+    "k2": 50, # number of nearest neighbors of cell lines in the tumor data
+    "cosine_norm": False,
+    "fk": 5 
+}
+
+UMAP_PARAMS = {
+    "n_neighbors": 10, # num nearest neighbors used to create UMAP plot
+    "n_components": 2, 
+    "metric": "euclidean", # distance metric used for the UMAP projection
+    "min_dist": 0.5 # min distance used to create UMAP plot
 }

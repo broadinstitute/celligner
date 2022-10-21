@@ -1,4 +1,3 @@
-from tabnanny import check
 from celligner.params import *
 from celligner import limma
 
@@ -24,49 +23,43 @@ import mnnpy
 class Celligner(object):
     def __init__(
         self,
-        umap_kwargs=UMAP_PARAMS,
-        pca_kwargs=PCA_PARAMS,
-        neighbors_kwargs=SC_NEIGH_PARAMS,
         topKGenes=TOP_K_GENES,
-        cpca_kwargs=CPCA_PARAMS,
+        pca_ncomp=PCA_NCOMP,
         cpca_ncomp=CPCA_NCOMP,
-        mnn_kwargs=MNN_PARAMS,
-        low_mem=False,
         louvain_kwargs=LOUVAIN_PARAMS,
-        mnn_method="mnn_marioni"
+        mnn_kwargs=MNN_PARAMS,
+        umap_kwargs=UMAP_PARAMS,
+        mnn_method="mnn_marioni",
+        low_mem=False,
     ):
-        """Initialize Celligner object
+        """
+        Initialize Celligner object
 
         Args:
-            umap_kwargs (dict, optional): see params.py . 
-            pca_kwargs (dict, optional): see see params.py . Defaults to {}.
             topKGenes (int, optional): see params.py. Defaults to 1000.
-            cpca_kwargs (dict, optional): see see params.py . Currently unused.
+            pca_ncomp (int, optional): see params.py. Defaults to 70.
             cpca_ncomp (int, optional): see params.py. Defaults to 4.
-            mnn_kwargs (dict, optional): see params.py . 
-            low_mem (bool, optional): adviced if you have less than 32Gb of RAM. Defaults to False.
-            louvain_kwargs (dict, optional): see params.py . Defaults to {}.
-            neighbors_kwargs (dict, optional): see params.py . Defaults to {}.
+            louvain_kwargs (dict, optional): see params.py
+            mnn_kwargs (dict, optional): see params.py 
+            umap_kwargs (dict, optional): see params.py
             mnn_method (str, optional): Only default "mnn_marioni" supported right now.
+            low_mem (bool, optional): adviced if you have less than 32Gb of RAM. Defaults to False.
         """
-        self.umap_kwargs = umap_kwargs
-        self.pca_kwargs = pca_kwargs
+        
         self.topKGenes = topKGenes
-        self.cpca_kwargs = cpca_kwargs
+        self.pca_ncomp = pca_ncomp
         self.cpca_ncomp = cpca_ncomp
-        self.mnn_kwargs = mnn_kwargs
-        self.low_mem = low_mem
         self.louvain_kwargs = louvain_kwargs
-        self.neighbors_kwargs = neighbors_kwargs
+        self.mnn_kwargs = mnn_kwargs
+        self.umap_kwargs = umap_kwargs
         self.mnn_method = mnn_method
+        self.low_mem = low_mem
 
         self.ref_input = None
-        self.ref_annotations = None
         self.ref_clusters = None
         self.ref_de_genes = None
         
         self.target_input = None
-        self.target_annotations = None
         self.target_clusters = None
         self.target_de_genes = None
 
@@ -76,62 +69,49 @@ class Celligner(object):
         
         self.umap_reduced = None
         self.output_clusters = None
+        self.tumor_CL_dist = None
 
 
-    def __checkExpression(self, expression, annot=None, check_genes=False):
+    def __checkExpression(self, expression, is_reference):
         """
-        Checks gene overlap for reference and target, checks for NaNs, then mean center the expression dataframe
+        Checks gene overlap with reference, checks for NaNs, then does mean-centering.
 
         Args:
-            expression (pd.Dataframe): expression data as samples x genes
-            annot (pd.DataFrame): annotations for expression data samples (rows)
-            gene_table (pd.Dataframe): gene dataframe with an ensembl_gene_id column
+            expression (pd.Dataframe): expression data as samples (rows) x genes (columns)
+            is_reference (bool): whether the expression is a reference or target
 
         Raises:
-            
-            ValueError: if some genes from the reference dataset are missing in the target dataset
+            ValueError: if some common genes are missing from the expression dataset
             ValueError: if the expression matrix contains nan values
-            ValueError: if the annotation matrix does not match the expression dataset samples
 
         Returns:
             (pd.Dataframe): the expression matrix
-            (pd.Dataframe): the annotation matrix
         """
-        
-        # Check gene overlap if this is the target dataset (called from transform)
-        if check_genes:
-            if expression.loc[:, expression.columns.isin(self.common_genes)].shape[1] < len(self.common_genes):
+        # Check gene overlap
+        if expression.loc[:, expression.columns.isin(self.common_genes)].shape[1] < len(self.common_genes):
+            if not is_reference:
                 raise ValueError("Some genes from reference dataset not found in target dataset")
-            expression = expression.loc[:, self.common_genes].astype(float)
+            else:
+                raise ValueError("Some genes from previously fit target dataset not found in new reference dataset")
+        
+        expression = expression.loc[:, self.common_genes].astype(float)
         
         # Raise issue if there are any NaNs in the expression dataframe
         if expression.isnull().values.any():
-            raise ValueError("Expression contains NaNs")
+            raise ValueError("Expression dataframe contains NaNs")
 
         # Mean center the expression dataframe
         expression = expression.sub(expression.mean(0), 1)
-
-        # Check annotations
-        if annot is not None:
-            if len(annot) != expression.shape[0] or list(expression.index) != list(annot.index):
-                raise ValueError("Annotations do not match expression dataframe")
-        else:
-            # Create empty annotations dataframe
-            annot = pd.DataFrame(
-                index=expression.index,
-                columns=["cell_type", "disease_type", "tissue_type"],
-                data=np.zeros((len(expression), 3)),
-            )
         
-        return expression, annot
+        return expression
 
 
     def __cluster(self, expression):
         """
-        Cluster expression in 70-dimensional PCA space using a shared nearest neighbor based method
+        Cluster expression in (n=70)-dimensional PCA space using a shared nearest neighbor based method
 
         Args:
-            expression (pd.Dataframe): expression data as samples x genes
+            expression (pd.Dataframe): expression data as samples (rows) x genes (columns)
 
         Returns:
             (list): cluster label for each sample
@@ -139,16 +119,16 @@ class Celligner(object):
         # Create anndata object
         adata = AnnData(expression, dtype='float64')
 
-        # Get PCs
-        print("Doing PCA...")
-        sc.tl.pca(adata, n_comps=70, zero_center=True, svd_solver='arpack')
+        # Find PCs
+        print("Doing PCA..")
+        sc.tl.pca(adata, n_comps=self.pca_ncomp, zero_center=True, svd_solver='arpack')
 
-        print("Computing neighbors...")
-        # Find shared nearest neighbors (SNN) in PCA space
-        # TODO? a bit different from R's version. ScanPy and Seurat differ in their implementation.
-        sc.pp.neighbors(adata, knn=True, use_rep='X_pca', **self.neighbors_kwargs)
+        # Find shared nearest neighbors (SNN) in PC space
+        # Might produce different results from the R version as ScanPy and Seurat differ in their implementation.
+        print("Computing neighbors..")
+        sc.pp.neighbors(adata, knn=True, use_rep='X_pca', n_neighbors=20, n_pcs=self.pca_ncomp)
         
-        print("Clustering...")
+        print("Clustering..")
         sc.tl.louvain(adata, use_weights=True, **self.louvain_kwargs)
         fit_clusters = adata.obs["louvain"].values.astype(int)
         
@@ -171,7 +151,7 @@ class Celligner(object):
         """
 
         n_clusts = len(set(clusters))
-        print("Running differential expression on " + str(n_clusts) + " clusters")
+        print("Running differential expression on " + str(n_clusts) + " clusters..")
         clusts = set(clusters) - set([-1])
         
         # make a design matrix
@@ -188,12 +168,12 @@ class Celligner(object):
         data = data[data.columns[clusters != -1].tolist()]
         
         # running limmapy
-        print("Running limmapy on the samples")
+        print("Running limmapy..")
         res = (
             limma.limmapy()
             .lmFit(data, design_matrix)
             .eBayes(trend=False)
-            .topTable(number=len(data))
+            .topTable(number=len(data)) 
             .iloc[:, len(clusts) :]
         )
         return res.sort_values(by="F", ascending=False)
@@ -201,11 +181,14 @@ class Celligner(object):
 
     def __runCPCA(self, centered_ref_input, centered_target_input):
         """
-        Do cPCA on the centered reference and target expression datasets
+        Perform contrastive PCA on the centered reference and target expression datasets
 
         Args:
             centered_ref_input (pd.DataFrame): reference expression matrix where the cluster mean has been subtracted
             centered_target_input (pd.DataFrame): target expression matrix where the cluster mean has been subtracted
+
+        Returns:
+            (ndarray, ncomponents x ngenes): principal axes in feature space
 
         """
         target_cov = centered_target_input.cov()
@@ -218,27 +201,21 @@ class Celligner(object):
         return pca.fit(target_cov - ref_cov).components_
 
 
-    def fit(self, ref_expr, ref_annot=None):
+    def fit(self, ref_expr):
         """
-        Fit the model to the reference expression dataset
+        Fit the model to the reference expression dataset - cluster + find differentially expressed genes.
 
         Args:
             ref_expr (pd.Dataframe): reference expression matrix of samples (rows) by genes (columns), 
                 where genes are ensembl gene IDs. Data should be log2(X+1) TPM data. 
                 In the standard Celligner pipeline this the cell line data.
-            ref_annot (pd.Dataframe, optional): sample annotations for the reference dataframe,
-                needs to contain ['cell_type', 'disease_type', 'tissue_type'].
-                Defaults to None (will create an empty dataframe).
 
         Raises:
                 ValueError: if only 1 cluster is found in the PCs of the expression
         """
         
         self.common_genes = list(ref_expr.columns)
-
-        print("Using " + str(len(self.common_genes)) + " genes in reference expression matrix")
-
-        self.ref_input, self.ref_annotations = self.__checkExpression(ref_expr, ref_annot)
+        self.ref_input = self.__checkExpression(ref_expr, is_reference=True)
         
         # Cluster and find differential expression for reference data
         self.ref_clusters = self.__cluster(self.ref_input)
@@ -249,54 +226,55 @@ class Celligner(object):
         return self
 
 
-    def transform(self, target_expr=None, target_annot=None, compute_cPCs=True):
-        """Align samples in the target dataset to samples in the reference dataset
+    def transform(self, target_expr=None, compute_cPCs=True):
+        """
+        Align samples in the target dataset to samples in the reference dataset
 
         Args:
             target_expr (pd.Dataframe, optional): target expression matrix of samples (rows) by genes (columns), 
                 where genes are ensembl gene IDs. Data should be log2(X+1) TPM data.
                 In the standard Celligner pipeline this the tumor data (TCGA). 
                 Set to None if re-running transform with new reference data.
-            target_annot (pd.Dataframe, optional): sample annotations for the target dataframe,
-                needs to contain ['cell_type', 'disease_type', 'tissue_type'].
-                Defaults to None (will create an empty dataframe).
             compute_cPCs (bool, optional): if True, compute cPCs from the fitted reference and target expression. Defaults to True.
 
         Raises:
             ValueError: if compute_cPCs is True but there is no reference input (fit has not been run)
-            ValueError: if compute_cPCs is False but there are no previously computed cPCs available
-            ValueError: if compute_target_fit is False but there are no previously computed DE genes available for the target dataset
-            ValueError: if compute_target_fit is True but compute_cPCs is false (there is no use case for this)
+            ValueError: if compute_cPCs is False but there are no previously computed cPCs available (transform has not been previously run)
+            ValueError: if no target expression is provided and there is no previously provided target data
+            ValueError: if no target expression is provided and compute_cPCs is true; there is no use case for this
             ValueError: if there are not enough clusters to compute DE genes for the target dataset
         """
 
         if self.ref_input is None and compute_cPCs:
-            raise ValueError("Need previously fitted reference dataset to compute cPCs, run fit() first")
+            raise ValueError("Need fitted reference dataset to compute cPCs, run fit function first")
 
         if not compute_cPCs and self.cpca_loadings is None:
-            raise ValueError("Transform needs to be run with compute_cPCs==True at least once")
+            raise ValueError("No cPCs found, transform needs to be run with compute_cPCs==True at least once")
 
-        if target_expr is None and self.target_de_genes is None:
-            raise ValueError("Transform needs to be run with a target expression dataset at least once")
+        if target_expr is None and self.target_input is None:
+            raise ValueError("No previous data found for target, transform needs to be run with target expression at least once")
 
-        if target_expr is not None:
-
-            self.target_input, self.target_annotations = self.__checkExpression(target_expr, target_annot, check_genes=True)
-
-            # Cluster and find differential expression for target data
-            self.target_clusters = self.__cluster(self.target_input)
-            if len(set(self.target_clusters)) < 2:
-                raise ValueError("Only one cluster found in reference data, no differential expression possible")
-            self.target_de_genes = self.__runDiffExprOnClusters(self.target_input, self.target_clusters)
-
-            # Union of the top 1000 differentially expressed genes in each dataset
-            self.de_genes = list(set(self.ref_de_genes[:self.topKGenes].index) | 
-                                set(self.target_de_genes[:self.topKGenes].index))
-
-        else:
-            print("No target expression provided, using previously fit target dataset")
+        if not compute_cPCs and target_expr is None:
+            raise ValueError("No use case for running transform without new target data when compute_cPCs==True")
 
         if compute_cPCs:
+            
+            if target_expr is not None:
+                
+                self.target_input = self.__checkExpression(target_expr, is_reference=False)
+
+                # Cluster and find differential expression for target data
+                self.target_clusters = self.__cluster(self.target_input)
+                if len(set(self.target_clusters)) < 2:
+                    raise ValueError("Only one cluster found in reference data, no differential expression possible")
+                self.target_de_genes = self.__runDiffExprOnClusters(self.target_input, self.target_clusters)
+
+                # Union of the top 1000 differentially expressed genes in each dataset
+                self.de_genes = pd.Series(list(self.ref_de_genes[:self.topKGenes].index) +
+                                          list(self.target_de_genes[:self.topKGenes].index)).drop_duplicates().to_list()
+
+            else:
+                print("INFO: No new target expression provided, using previously provided target dataset")
 
             # Subtract cluster average from cluster samples
             centered_ref_input = pd.concat(
@@ -314,7 +292,7 @@ class Celligner(object):
             ).loc[self.target_input.index]
             
             # Compute contrastive PCs
-            print("doing cPCA..")
+            print("Running cPCA..")
             self.cpca_loadings = self.__runCPCA(centered_ref_input, centered_target_input)
 
             del centered_ref_input, centered_target_input
@@ -329,8 +307,31 @@ class Celligner(object):
                     .T
             )
 
+        # Using previously computed cPCs - for multi-dataset alignment
         else:
-            self.target_input, self.target_annotations = self.__checkExpression(target_expr, target_annot, check_genes=True)
+            
+            # Allow some genes to be missing in new target dataset
+            missing_genes = list(self.ref_input.loc[:, ~self.ref_input.columns.isin(target_expr.columns)].columns)
+            if len(missing_genes) > 0:
+                print('WARNING: %d genes from reference dataset not found in new target dataset, subsetting to overlap' % (len(missing_genes)))
+                # Get index of dropped genes
+                drop_idx = [self.ref_input.columns.get_loc(g) for g in missing_genes]
+                
+                # Filter refence dataset
+                self.ref_input = self.ref_input.loc[:, self.ref_input.columns.isin(target_expr.columns)]
+                self.common_genes = list(self.ref_input.columns)
+
+                # Drop cPCA loadings for genes that were filtered out
+                self.cpca_loadings = np.array([np.delete(self.cpca_loadings[n], drop_idx) for n in range(self.cpca_ncomp)])
+                
+                # Check if genes need to be dropped from DE list
+                overlap = self.ref_input.loc[:, self.ref_input.columns.isin(self.de_genes)]
+                if overlap.shape[1] < len(self.de_genes):
+                    print('WARNING: dropped genes include %d differentially expressed genes that may be important' % (len(self.de_genes) - overlap.shape[1]))
+                    temp = pd.Series(self.de_genes)
+                    self.de_genes = temp[temp.isin(self.ref_input.columns)].to_list()
+
+            self.target_input = self.__checkExpression(target_expr, is_reference=False)
             transformed_ref = self.ref_input
         
         # Only need to regress out of target dataset if using previously computed cPCs
@@ -342,11 +343,10 @@ class Celligner(object):
                 .T
         )
 
-        # Do MNN (dropped Marioni version for now for simplicity/getting this running)
-        varsubset = np.array([1 if i in self.de_genes else 0 for i in self.target_input.columns]).astype(bool)
-
-        # if self.mnn_method == "mnn_marioni":
+        # Do MNN 
         print("Doing the MNN analysis using Marioni et al. method..")
+        # Use top DE genes only
+        varsubset = np.array([1 if i in self.de_genes else 0 for i in self.target_input.columns]).astype(bool)
         target_corrected, self.mnn_pairs = mnnpy.marioniCorrect(
             transformed_ref,
             transformed_target,
@@ -354,29 +354,11 @@ class Celligner(object):
             var_subset=varsubset,
             **self.mnn_kwargs,
         )
-        
-        # elif self.mnn_method == "mnn":
-        #     print("doing the MNN analysis using scanPy MNN...")
-        #     self.corrected, mnn_pairs, self.other = mnnpy.mnn_correct(
-        #         transformed_ref.values,
-        #         transformed_target.values,
-        #         var_index=list(range(len(transformed_ref.columns))),
-        #         varsubset=varsubset,
-        #         **self.mnn_kwargs,
-        #     )
-        #     self.mnn_pairs = mnn_pairs[-1]
-        #     self.corrected = pd.DataFrame(
-        #         self.corrected[len(self.fit_input) :],
-        #         index=list(self.transform_input.index),
-        #         columns=self.transform_input.columns,
-        #     )
 
         if compute_cPCs:
             self.combined_output =  pd.concat([target_corrected, transformed_ref])
-            self.combined_annotations = pd.concat([self.target_annotations, self.ref_annotations])
-        else: # Append at the end
-            self.combined_output =  pd.concat([self.ref_input, target_corrected]) 
-            self.combined_annotations = pd.concat([self.ref_annotations, self.target_annotations])
+        else: # Append at the end for multi-dataset alignment case
+            self.combined_output =  pd.concat([transformed_ref, target_corrected])
         
         del target_corrected
         gc.collect()
@@ -385,55 +367,62 @@ class Celligner(object):
 
         return self
 
-    def computeMetricsForOutput(self, cl_ids=None, tumor_ids=None):
-        """Compute UMAP embedding, clusters and tumor-cell line distance for combined output
 
+    def computeMetricsForOutput(self, umap_rand_seed=14, UMAP_only=False, model_ids=None, tumor_ids=None):
+        """
+        Compute UMAP embedding and optionally clusters and tumor - model distance.
+        
         Args:
-            cl_ids (list): cell line IDs for computing tumor-CL distance. Defaults to None, in which case the reference index is used.
-            tumor_ids (list): tumor IDs for computing tumor-CL distance. Defaults to None, in which case the target index is used.
-
+            UMAP_only (bool, optional): Only recompute the UMAP. Defaults to False.
+            umap_rand_seed (int, optional): Set seed for UMAP, to try an alternative. Defaults to 14.
+            model_ids (list, optional): model IDs for computing tumor-CL distance. Defaults to None, in which case the reference index is used.
+            tumor_ids (list, optional): tumor IDs for computing tumor-CL distance. Defaults to None, in which case the target index is used.
+        
         Raises:
-            ValueError: if there are no corrected expression matrices
+            ValueError: if there is no corrected expression matrix
         """
         if self.combined_output is None:
             raise ValueError("No corrected expression matrix found, run this function after transform()")
 
         print("Computing UMAP embedding...")
         # Compute UMAP embedding for results
-        pca = PCA(**self.pca_kwargs)
+        pca = PCA(self.pca_ncomp)
         pcs = pca.fit_transform(self.combined_output)
-        umap_reduced = umap.UMAP(**self.umap_kwargs, random_state=0).fit_transform(pcs)
+        
+        umap_reduced = umap.UMAP(**self.umap_kwargs, random_state=umap_rand_seed).fit_transform(pcs)
         self.umap_reduced = pd.DataFrame(umap_reduced, index=self.combined_output.index, columns=['umap1','umap2'])
-        # Add annotations to UMAP output
-        self.umap_reduced = pd.concat([self.umap_reduced, pd.concat([self.target_annotations, self.ref_annotations])], axis=1)
 
-        # Compute clusters in Celligner space
-        self.output_clusters = self.__cluster(self.combined_output)
+        if not UMAP_only:
+            
+            print('Computing clusters..')
+            self.output_clusters = self.__cluster(self.combined_output)
 
-        print("Computing tumor-CL distance...")
-        # Compute Euclidean distances between tumor samples and cell line samples in the combined 70 principal components
-        pcs = pd.DataFrame(pcs, index=self.combined_output.index)
-        if cl_ids is None: cl_ids = self.ref_input.index
-        if tumor_ids is None: tumor_ids = self.target_input.index
-        cl_pcs = pcs[pcs.index.isin(cl_ids)]
-        tumor_pcs = pcs[pcs.index.isin(tumor_ids)]
-        self.tumor_CL_dist = pd.DataFrame(metrics.pairwise_distances(tumor_pcs, cl_pcs), index=tumor_pcs.index, columns=cl_pcs.index)
-
+            print("Computing tumor-CL distance..")
+            pcs = pd.DataFrame(pcs, index=self.combined_output.index)
+            if model_ids is None: model_ids = self.ref_input.index
+            if tumor_ids is None: tumor_ids = self.target_input.index
+            model_pcs = pcs[pcs.index.isin(model_ids)]
+            tumor_pcs = pcs[pcs.index.isin(tumor_ids)]
+            
+            self.tumor_CL_dist = pd.DataFrame(metrics.pairwise_distances(tumor_pcs, model_pcs), index=tumor_pcs.index, columns=model_pcs.index)
+        
         return self
 
 
     def makeNewReference(self):
-        """Make a new reference dataset from the previously transformed fit+target datasets. Use for multi-dataset algignment.
+        """
+        Make a new reference dataset from the previously transformed reference+target datasets. 
+        Used for multi-dataset alignment with previously computed cPCs and DE genes.
         
         """
         self.ref_input = self.combined_output
-        self.ref_annotations = self.combined_annotations
-
+        self.target_input = None
         return self
     
     
     def save(self, file_name):
-        """save the model as a pickle file
+        """
+        Save the model as a pickle file
 
         Args:
             file_name (str): name of file in which to save the model
@@ -444,7 +433,8 @@ class Celligner(object):
 
 
     def load(self, file_name):
-        """load the model from a pickle file
+        """
+        Load the model from a pickle file
 
         Args:
             file_name (str): pickle file to load the model from

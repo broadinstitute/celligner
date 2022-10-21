@@ -40,11 +40,7 @@ class limmapy:
     def __init__(self):
         self.limma_result = None
 
-    def lmFit(self, count_matrix, design_matrix, **kwargs):  # OPTIONAL
-        """
-        args:
-            geoMeans: cond*gene matrix
-        """
+    def lmFit(self, count_matrix, design_matrix, **kwargs):
         with localconverter(ro.default_converter + pandas2ri.converter):
             count_matrix = pandas2ri.py2rpy(count_matrix.astype(int))
             design_matrix = pandas2ri.py2rpy(design_matrix.astype(int))
