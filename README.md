@@ -1,6 +1,6 @@
 # Celligner
 
-![](docs/celligner_umap_dmc22q2.png)
+![](docs/celligner_public22q2.png)
 
 __Celligner__ is a computational approach for aligning tumor and cell line transcriptional profiles.
 

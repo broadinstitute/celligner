@@ -6,11 +6,11 @@ from taigapy import TaigaClient
 tc = TaigaClient()
 
 # Load data
-CCLE_expression = tc.get(name='dmc-22q2-5e51', version=16, file='CCLE_expression_full')
+CCLE_expression_full = tc.get(name='public-22q2-de04', version=14, file='CCLE_expression_full')
 tumor_expression = tc.get(name='celligner-input-9827', version=2, file='tumor_expression')
 
 # Filter to columns with ensembl id
-CCLE_expression = CCLE_expression.filter(like='ENSG')
+CCLE_expression = CCLE_expression_full.filter(like='ENSG')
 CCLE_expression.columns = pd.Series(CCLE_expression.columns).apply(lambda x: re.search('(ENSG\d+)', x).group(1))
 
 ## Load HGNC gene set, filter to functional subset
@@ -34,4 +34,4 @@ my_celligner.transform(tumor_expression)
 # Compute UMAP, clusters and tumor - model distance
 my_celligner.computeMetricsForOutput()
 
-my_celligner.save("model_22q2_dmc.pkl")
+my_celligner.save("model_22q2_public.pkl")
