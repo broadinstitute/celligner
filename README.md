@@ -24,13 +24,15 @@ The Celligner output can be explored at: [https://depmap.org/portal/celligner/](
 
 Before running pip, make sure that you have R installed.
 
-To install the latest version of Celligner in dev mode, do:
+To install the latest version of Celligner in dev mode, run the following (note that Celligner requires the specific version of mnnpy that is associated with the repository as a submodule):
 
 ```bash
 git clone https://github.com/broadinstitute/celligner.git
 git checkout new_dev
 cd celligner
 pip install -e .
+cd mnnpy 
+pip install .
 ```
 
 A dockerfile and build script is also provided.
