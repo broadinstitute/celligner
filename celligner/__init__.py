@@ -65,6 +65,7 @@ class Celligner(object):
 
         self.de_genes = None
         self.cpca_loadings = None
+        self.cpca_explained_var = None
         self.combined_output = None
         
         self.umap_reduced = None
@@ -189,6 +190,7 @@ class Celligner(object):
 
         Returns:
             (ndarray, ncomponents x ngenes): principal axes in feature space
+            (ndarray, ncomponents,): variance explained by each component
 
         """
         target_cov = centered_target_input.cov()
@@ -198,7 +200,8 @@ class Celligner(object):
         else: 
             pca = IncrementalPCA(self.cpca_ncomp, copy=False, batch_size=1000)
         
-        return pca.fit(target_cov - ref_cov).components_
+        pca.fit(target_cov - ref_cov)
+        return pca.components_, pca.explained_variance_
 
 
     def fit(self, ref_expr):
@@ -293,7 +296,7 @@ class Celligner(object):
             
             # Compute contrastive PCs
             print("Running cPCA..")
-            self.cpca_loadings = self.__runCPCA(centered_ref_input, centered_target_input)
+            self.cpca_loadings, self.cpca_explained_var = self.__runCPCA(centered_ref_input, centered_target_input)
 
             del centered_ref_input, centered_target_input
             gc.collect()
@@ -336,7 +339,7 @@ class Celligner(object):
         
         # Only need to regress out of target dataset if using previously computed cPCs
         print("Regressing top cPCs out of target dataset..")
-        transformed_target= (self.target_input - 
+        transformed_target = (self.target_input - 
             LinearRegression(fit_intercept=False)
                 .fit(self.cpca_loadings.T, self.target_input.T)
                 .predict(self.cpca_loadings.T)
