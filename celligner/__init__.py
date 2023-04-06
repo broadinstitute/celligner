@@ -285,6 +285,8 @@ class Celligner(object):
 
         # mean center the dataframe
         # TODO? a bit different from R's version as it was using an approximate fast centering method
+        print('BE CAREFUL! I found a bug here. it can mean-center multiple time if using addToFit()')
+        print('please feel free to propose an update')
         self.fit_input = self.fit_input.sub(self.fit_input.mean(0), 1)
         # clustering: doing SNN on the reduced data
         print("clustering...")
