@@ -9,3 +9,4 @@ scipy==1.9.1
 louvain==0.7.1
 rpy2==3.5.4
 cython==0.29.32
+matplotlib<3.7
