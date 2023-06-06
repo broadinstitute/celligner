@@ -13,6 +13,13 @@ data/*
 .LSOverride
 .vscode
 
+# output model
+*.pkl
+
+# sparkles
+.kubeque-cached-file-hashes
+.sparkles-cache
+
 # Icon must end with two \r
 Icon
 

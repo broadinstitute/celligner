@@ -38,16 +38,9 @@ class limmapy:
     '''
 
     def __init__(self):
-        print("you need to have R installed with the limma library installed")
-        print(rpy2.__version__)
         self.limma_result = None
 
-
-    def lmFit(self, count_matrix, design_matrix, **kwargs):  # OPTIONAL
-        """
-        args:
-            geoMeans: cond*gene matrix
-        """
+    def lmFit(self, count_matrix, design_matrix, **kwargs):
         with localconverter(ro.default_converter + pandas2ri.converter):
             count_matrix = pandas2ri.py2rpy(count_matrix.astype(int))
             design_matrix = pandas2ri.py2rpy(design_matrix.astype(int))
