@@ -5,7 +5,7 @@ umap>=0.1
 igraph==0.9.11
 scanpy==1.9.1
 anndata==0.8.0
-scipy==1.9.1
+scipy==1.10.0
 louvain==0.7.1
 rpy2==3.5.4
 cython==0.29.32
