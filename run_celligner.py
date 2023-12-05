@@ -48,8 +48,7 @@ headers = {
     'Accept': 'application/json',
 }
 
-oncotree = requests.get('https://oncotree.info/api/tumorTypes', headers=headers)
-oncotree = pd.DataFrame(oncotree.json()).set_index('code')
+oncotree = tc.get(name='oncotree-42c7', version=1, file='oncotree').set_index('code')
 
 nv_OT_map = {
     'colorectal': 'BOWEL',
